@@ -1,6 +1,9 @@
 | Supported Targets | ESP32-P4 | ESP32-S2 | ESP32-S3 |
 | ----------------- | -------- | -------- | -------- |
 
+# config wifi
+Copy config.template.h into config.h and edit.
+
 # USB CDC-ACM Virtual COM Port example
 
 (See the README.md file in the upper level 'examples' directory for more information about examples.)
