@@ -1,105 +1,206 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>ESP Terminal</title>
+  <meta charset="UTF-8">
+  <title>ESP Terminal - Theme Toggle</title>
   <style>
     body {
-      background-color: #000;
-      color: #00ff00;
-      font-family: "Fira Code", monospace;
       margin: 0;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      font-family: "Fira Code", monospace;
+      transition: background-color 0.4s ease, color 0.4s ease;
     }
 
+    /* Terminal Box */
     #term {
       white-space: pre-wrap;
-      background-color: #000;
-      border: 2px solid #00ff00;
       padding: 12px;
       flex-grow: 1;
       overflow-y: auto;
       font-size: 14px;
       line-height: 1.4;
-      text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
-      box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.3);
+      transition: all 0.4s ease;
     }
 
-    form {
+    /* Controls Section */
+    .controls {
       display: flex;
-      background-color: #000;
-      border-top: 1px solid #00ff00;
+      align-items: center;
       padding: 8px;
+      gap: 8px;
+      border-top: 2px solid;
+      min-height: 55px;
+      box-sizing: border-box;
+      transition: background-color 0.4s ease, border-color 0.4s ease;
     }
 
     input {
       flex-grow: 1;
-      background-color: #000;
-      border: 1px solid #00ff00;
-      color: #00ff00;
       padding: 8px;
-      font-family: "Fira Code", monospace;
       font-size: 14px;
       outline: none;
-      text-shadow: 0 0 5px #00ff00;
-    }
-
-    input:focus {
-      border-color: #00ff99;
-      box-shadow: 0 0 8px #00ff99;
+      transition: all 0.4s ease;
     }
 
     button {
-      background-color: #00ff00;
-      border: none;
-      color: #000;
-      padding: 8px 14px;
-      margin-left: 8px;
       font-size: 14px;
       font-weight: bold;
       cursor: pointer;
-      text-shadow: none;
+      transition: all 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    /* Theme Toggle Button */
+    #themeToggle {
+      padding: 8px 12px;
+      white-space: nowrap;
+      transition: all 0.4s ease, box-shadow 0.4s ease, color 0.4s ease, background-color 0.4s ease, border 0.4s ease;
+    }
+
+    /* Send Button */
+    #sendBtn {
+      padding: 8px 14px;
       transition: background-color 0.2s ease;
     }
 
-    button:hover {
-      background-color: #00cc00;
+    /* Modern Dark Theme */
+    body.modern {
+      background-color: #1e1e1e;
+      color: #e0e0e0;
+    }
+    body.modern #term {
+      background-color: #0d0d0d;
+      border: 2px solid #444;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    body.modern .controls {
+      background-color: #1c1c1c;
+      border-color: #444;
+    }
+    body.modern input {
+      background-color: #1c1c1c;
+      border: 1px solid #555;
+      color: #fff;
+    }
+    body.modern input:focus {
+      border-color: #00ff99;
+      box-shadow: 0 0 5px #00ff99;
+    }
+    body.modern #sendBtn {
+      background-color: #00ff99;
+      color: #000;
+      border: none;
+    }
+    body.modern #sendBtn:hover {
+      background-color: #00cc7a;
+    }
+    body.modern #themeToggle {
+      background-color: #00ff99;
+      color: #000;
+      border: none;
+      box-shadow: 0 0 8px #00ff99;
+    }
+    body.modern #themeToggle:hover {
+      background-color: #00cc7a;
     }
 
-    /* Flicker animation for authenticity */
+    /* Retro Hacker Theme */
+    body.retro {
+      background-color: #000;
+      color: #00ff00;
+    }
+    body.retro #term {
+      background-color: #000;
+      border: 2px solid #00ff00;
+      text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
+      box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.3);
+      animation: flicker 1.5s infinite alternate;
+    }
+    body.retro .controls {
+      background-color: #000;
+      border-color: #00ff00;
+    }
+    body.retro input {
+      background-color: #000;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      text-shadow: 0 0 5px #00ff00;
+    }
+    body.retro input:focus {
+      border-color: #00ff99;
+      box-shadow: 0 0 8px #00ff99;
+    }
+    body.retro #sendBtn {
+      background-color: #00ff00;
+      color: #000;
+      border: none;
+    }
+    body.retro #sendBtn:hover {
+      background-color: #00cc00;
+    }
+    body.retro #themeToggle {
+      background-color: #000;
+      color: #00ff00;
+      border: 2px solid #00ff00;
+      text-shadow: 0 0 5px #00ff00;
+      box-shadow: 0 0 15px rgba(0,255,0,0.5);
+    }
+    body.retro #themeToggle:hover {
+      background-color: #002200;
+    }
+
     @keyframes flicker {
       0% { opacity: 1; }
       50% { opacity: 0.97; }
       100% { opacity: 1; }
     }
-
-    #term {
-      animation: flicker 1.5s infinite alternate;
-    }
   </style>
 </head>
 <body>
   <div id="term"></div>
-  <form onsubmit="send(event)">
+  
+  <div class="controls">
+    <button id="themeToggle">Switch to Retro</button>
     <input id="input" autocomplete="off" placeholder="Type a command...">
-    <button>Send</button>
-  </form>
+    <button id="sendBtn" onclick="send(event)">Send</button>
+  </div>
 
   <script>
+    const toggleBtn = document.getElementById('themeToggle');
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme') || 'modern';
+    document.body.classList.add(savedTheme);
+    updateToggleText(savedTheme);
+
+    // Theme toggle logic
+    toggleBtn.addEventListener('click', () => {
+      document.body.classList.toggle('modern');
+      document.body.classList.toggle('retro');
+      const newTheme = document.body.classList.contains('modern') ? 'modern' : 'retro';
+      updateToggleText(newTheme);
+      localStorage.setItem('theme', newTheme);
+    });
+
+    function updateToggleText(theme) {
+      toggleBtn.textContent = theme === 'modern' ? 'Switch to Retro' : 'Switch to Modern';
+    }
+
+    // Fetch terminal data
     function update() {
       fetch('/serial')
         .then(r => r.text())
         .then(t => {
           const term = document.getElementById('term');
           term.textContent = t.replace(/\r\n|\r|\n/g, '\n');
-          term.scrollTop = term.scrollHeight; // Auto scroll to bottom
+          term.scrollTop = term.scrollHeight;
         });
     }
-
     setInterval(update, 1000);
     update();
 
+    // Send command
     function send(e) {
       e.preventDefault();
       const input = document.getElementById('input');

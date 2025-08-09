@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <algorithm>
 
 #include "config.h"
 
@@ -339,50 +340,48 @@ namespace
 
     esp_err_t firmware_upload_handler(httpd_req_t *req)
     {
-        // Allocate buffer for firmware (adjust size as needed)
-        const size_t max_fw_size = 2 * 1024 * 1024; // 2MB
-        uint8_t *fw_buf = (uint8_t *)malloc(max_fw_size);
-        if (!fw_buf)
-        {
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No memory");
-            return ESP_FAIL;
-        }
-
-        int received = 0;
-        int remaining = req->content_len;
-        while (remaining > 0 && received < max_fw_size)
-        {
-            int to_read = remaining > 4096 ? 4096 : remaining;
-            int r = httpd_req_recv(req, (char *)fw_buf + received, to_read);
-            if (r <= 0)
-            {
-                free(fw_buf);
-                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Receive error");
-                return ESP_FAIL;
-            }
-            received += r;
-            remaining -= r;
-        }
-
-        // Start OTA update from buffer
         esp_err_t ret = ESP_OK;
         esp_ota_handle_t ota_handle = 0;
         const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
         if (!update_partition)
         {
-            free(fw_buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No OTA partition");
             return ESP_FAIL;
         }
-        ret = esp_ota_begin(update_partition, received, &ota_handle);
+
+        ret = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
         if (ret != ESP_OK)
         {
-            free(fw_buf);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA begin failed");
             return ESP_FAIL;
         }
-        ret = esp_ota_write(ota_handle, fw_buf, received);
-        free(fw_buf);
+
+        char *ota_write_buf = (char *)malloc(4096); // Use a smaller buffer for writing
+        if (!ota_write_buf)
+        {
+            esp_ota_end(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No memory for OTA buffer");
+            return ESP_FAIL;
+        }
+
+        int received_bytes = 0;
+        int remaining_bytes = req->content_len;
+
+        while (remaining_bytes > 0)
+        {
+            int recv_len = httpd_req_recv(req, ota_write_buf, std::min(remaining_bytes, 4096));
+            if (recv_len <= 0)
+            {
+                free(ota_write_buf);
+                esp_ota_end(ota_handle);
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Receive error during OTA");
+                return ESP_FAIL;
+            }
+            ret = esp_ota_write(ota_handle, ota_write_buf, recv_len);
+            received_bytes += recv_len;
+            remaining_bytes -= recv_len;
+        }
+        free(ota_write_buf);
         if (ret != ESP_OK)
         {
             esp_ota_end(ota_handle);
