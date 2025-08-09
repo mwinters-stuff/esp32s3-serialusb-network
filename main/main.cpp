@@ -27,11 +27,13 @@
 #include "esp_event.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "esp_littlefs.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
 using namespace esp_usb;
-
 
 namespace
 {
@@ -46,24 +48,25 @@ namespace
     static std::unique_ptr<CdcAcmDevice> vcp;
 
     esp_err_t ota_update_handler(httpd_req_t *req);
+    esp_err_t upload_page_handler(httpd_req_t *req);
+    esp_err_t firmware_upload_handler(httpd_req_t *req);
 
     esp_err_t terminal_page_handler(httpd_req_t *req)
     {
-        const char *html =
-            "<!DOCTYPE html><html><head><title>ESP Terminal</title>"
-            "<style>body{font-family:monospace;}#term{white-space:pre-wrap;border:1px solid #ccc;padding:10px;height:500px;overflow:auto;}</style>"
-            "</head><body>"
-            "<div id='term'></div>"
-            "<form onsubmit='send(event)'><input id='input' autocomplete='off'><button>Send</button></form>"
-            "<script>"
-            "function update(){fetch('/serial').then(r=>r.text()).then(t=>{document.getElementById('term').textContent=t.replace(/\\r\\n|\\r|\\n/g,'\\n');});}"
-            "setInterval(update,1000);update();"
-            "function send(e){e.preventDefault();"
-            "fetch('/serial', {method:'POST',body:document.getElementById('input').value});"
-            "document.getElementById('input').value='';}"
-            "</script>"
-            "</body></html>";
-        httpd_resp_sendstr(req, html);
+        FILE *f = fopen("/littlefs/terminal.html", "r");
+        if (!f)
+        {
+            httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+            return ESP_FAIL;
+        }
+        char buf[1024];
+        size_t read_bytes;
+        while ((read_bytes = fread(buf, 1, sizeof(buf), f)) > 0)
+        {
+            httpd_resp_send_chunk(req, buf, read_bytes);
+        }
+        fclose(f);
+        httpd_resp_send_chunk(req, NULL, 0); // End response
         return ESP_OK;
     }
 
@@ -126,6 +129,20 @@ namespace
                 .handler = ota_update_handler,
                 .user_ctx = NULL};
             httpd_register_uri_handler(server, &ota_uri);
+
+            httpd_uri_t upload_uri = {
+                .uri = "/upload.html",
+                .method = HTTP_GET,
+                .handler = upload_page_handler,
+                .user_ctx = NULL};
+            httpd_register_uri_handler(server, &upload_uri);
+
+            httpd_uri_t fw_upload_post_uri = {
+                .uri = "/upload",
+                .method = HTTP_POST,
+                .handler = firmware_upload_handler,
+                .user_ctx = NULL};
+            httpd_register_uri_handler(server, &fw_upload_post_uri);
         }
         return server;
     }
@@ -301,6 +318,94 @@ namespace
         return ret;
     }
 
+    esp_err_t upload_page_handler(httpd_req_t *req)
+    {
+        FILE *f = fopen("/littlefs/upload.html", "r");
+        if (!f)
+        {
+            httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+            return ESP_FAIL;
+        }
+        char buf[1024];
+        size_t read_bytes;
+        while ((read_bytes = fread(buf, 1, sizeof(buf), f)) > 0)
+        {
+            httpd_resp_send_chunk(req, buf, read_bytes);
+        }
+        fclose(f);
+        httpd_resp_send_chunk(req, NULL, 0); // End response
+        return ESP_OK;
+    }
+
+    esp_err_t firmware_upload_handler(httpd_req_t *req)
+    {
+        // Allocate buffer for firmware (adjust size as needed)
+        const size_t max_fw_size = 2 * 1024 * 1024; // 2MB
+        uint8_t *fw_buf = (uint8_t *)malloc(max_fw_size);
+        if (!fw_buf)
+        {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No memory");
+            return ESP_FAIL;
+        }
+
+        int received = 0;
+        int remaining = req->content_len;
+        while (remaining > 0 && received < max_fw_size)
+        {
+            int to_read = remaining > 4096 ? 4096 : remaining;
+            int r = httpd_req_recv(req, (char *)fw_buf + received, to_read);
+            if (r <= 0)
+            {
+                free(fw_buf);
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Receive error");
+                return ESP_FAIL;
+            }
+            received += r;
+            remaining -= r;
+        }
+
+        // Start OTA update from buffer
+        esp_err_t ret = ESP_OK;
+        esp_ota_handle_t ota_handle = 0;
+        const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
+        if (!update_partition)
+        {
+            free(fw_buf);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No OTA partition");
+            return ESP_FAIL;
+        }
+        ret = esp_ota_begin(update_partition, received, &ota_handle);
+        if (ret != ESP_OK)
+        {
+            free(fw_buf);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA begin failed");
+            return ESP_FAIL;
+        }
+        ret = esp_ota_write(ota_handle, fw_buf, received);
+        free(fw_buf);
+        if (ret != ESP_OK)
+        {
+            esp_ota_end(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA write failed");
+            return ESP_FAIL;
+        }
+        ret = esp_ota_end(ota_handle);
+        if (ret != ESP_OK)
+        {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA end failed");
+            return ESP_FAIL;
+        }
+        ret = esp_ota_set_boot_partition(update_partition);
+        if (ret != ESP_OK)
+        {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Set boot partition failed");
+            return ESP_FAIL;
+        }
+
+        httpd_resp_sendstr(req, "Firmware uploaded! Rebooting...");
+        esp_restart();
+        return ESP_OK;
+    }
 }
 
 /**
@@ -310,6 +415,45 @@ namespace
  */
 extern "C" void app_main(void)
 {
+    // Mount LittleFS
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = "/littlefs",
+        .partition_label = "littlefs",
+        .partition = NULL,
+        .format_if_mount_failed = false,
+        .read_only = true,
+        .dont_mount = false,
+        .grow_on_mount = false,
+    };
+    esp_err_t ret = esp_vfs_littlefs_register(&conf);
+    if (ret != ESP_OK)
+    {
+        if (ret == ESP_FAIL)
+        {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        }
+        else if (ret == ESP_ERR_NOT_FOUND)
+        {
+            ESP_LOGE(TAG, "Failed to find LittleFS partition");
+        }
+        else
+        {
+            ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+        }
+        return;
+    }
+
+    size_t total = 0, used = 0;
+    ret = esp_littlefs_info(conf.partition_label, &total, &used);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
+        return;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
 
     wifi_init_sta(); // Add this line
 

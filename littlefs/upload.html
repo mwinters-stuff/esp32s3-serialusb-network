@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Firmware Upload</title>
+</head>
+<body>
+  <h1>Firmware Upload</h1>
+  <form id="uploadForm" enctype="multipart/form-data" method="post">
+    <input type="file" name="firmware" required>
+    <button type="submit">Upload</button>
+  </form>
+  <div id="result"></div>
+  <script>
+    document.getElementById('uploadForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const formData = new FormData(uploadForm);
+      const res = await fetch('/upload', { method: 'POST', body: formData });
+      document.getElementById('result').innerText = await res.text();
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ESP Terminal</title>
+  <style>
+    body {
+      background-color: #000;
+      color: #00ff00;
+      font-family: "Fira Code", monospace;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #term {
+      white-space: pre-wrap;
+      background-color: #000;
+      border: 2px solid #00ff00;
+      padding: 12px;
+      flex-grow: 1;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.4;
+      text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
+      box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.3);
+    }
+
+    form {
+      display: flex;
+      background-color: #000;
+      border-top: 1px solid #00ff00;
+      padding: 8px;
+    }
+
+    input {
+      flex-grow: 1;
+      background-color: #000;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 8px;
+      font-family: "Fira Code", monospace;
+      font-size: 14px;
+      outline: none;
+      text-shadow: 0 0 5px #00ff00;
+    }
+
+    input:focus {
+      border-color: #00ff99;
+      box-shadow: 0 0 8px #00ff99;
+    }
+
+    button {
+      background-color: #00ff00;
+      border: none;
+      color: #000;
+      padding: 8px 14px;
+      margin-left: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      text-shadow: none;
+      transition: background-color 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #00cc00;
+    }
+
+    /* Flicker animation for authenticity */
+    @keyframes flicker {
+      0% { opacity: 1; }
+      50% { opacity: 0.97; }
+      100% { opacity: 1; }
+    }
+
+    #term {
+      animation: flicker 1.5s infinite alternate;
+    }
+  </style>
+</head>
+<body>
+  <div id="term"></div>
+  <form onsubmit="send(event)">
+    <input id="input" autocomplete="off" placeholder="Type a command...">
+    <button>Send</button>
+  </form>
+
+  <script>
+    function update() {
+      fetch('/serial')
+        .then(r => r.text())
+        .then(t => {
+          const term = document.getElementById('term');
+          term.textContent = t.replace(/\r\n|\r|\n/g, '\n');
+          term.scrollTop = term.scrollHeight; // Auto scroll to bottom
+        });
+    }
+
+    setInterval(update, 1000);
+    update();
+
+    function send(e) {
+      e.preventDefault();
+      const input = document.getElementById('input');
+      fetch('/serial', { method: 'POST', body: input.value });
+      input.value = '';
+    }
+  </script>
+</body>
+</html>
