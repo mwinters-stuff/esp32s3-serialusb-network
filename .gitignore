@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+build/**
+managed_components/**
+dependencies.lock
