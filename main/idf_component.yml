@@ -6,3 +6,4 @@ dependencies:
   usb_host_vcp: "^1"
   idf: ">=5.1.0"
   joltwallet/littlefs: "~=1.16.0"
+  espressif/mdns: "^1.0.0"

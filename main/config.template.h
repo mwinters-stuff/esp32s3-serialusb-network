@@ -1,6 +1,9 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+#define MDNS_HOSTNAME "esp32-vcp"
+#define MDNS_INSTANCE "ESP32 with mDNS"
+
 #define WIFI_SSID "SSID"
 #define WIFI_PASSWORD "password"
 
