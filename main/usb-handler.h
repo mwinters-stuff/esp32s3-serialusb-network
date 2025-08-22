@@ -36,6 +36,7 @@ public:
   void usb_loop();
   esp_err_t tx_blocking(uint8_t *data, size_t len);
   esp_err_t serial_get_handler(httpd_req_t *req);
+  bool isConnected() { return vcp != nullptr; }
 };
 
 #endif

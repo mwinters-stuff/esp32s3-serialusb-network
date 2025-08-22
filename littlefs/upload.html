@@ -1,22 +1,181 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-  <title>Firmware Upload</title>
+  <meta charset="utf-8" />
+  <title>ESP32-S3 OTA Upload</title>
+  <style>
+    body {
+        font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      padding-top: 40px;
+    }
+
+    .card {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 12px;
+      width: 400px;
+      box-shadow: 0 0 12px rgba(0,0,0,.4);
+      margin-bottom: 32px;
+    }
+
+    button {
+      padding: 8px 14px;
+      border: none;
+      background: #00ff99;
+      color: #000;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    progress {
+      width: 100%;
+      height: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .row input[type="file"] {
+      flex: 1;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 13px;
+      opacity: .9;
+    }
+
+    small {
+      opacity: .8;
+    }
+  </style>
 </head>
+
 <body>
-  <h1>Firmware Upload</h1>
-  <form id="uploadForm" enctype="multipart/form-data" method="post">
-    <input type="file" name="firmware" required>
-    <button type="submit">Upload</button>
-  </form>
-  <div id="result"></div>
+  <div class="card">
+    <h2>ESP32-S3 OTA Upload</h2>
+    <small>Send a <code>.bin</code> Firmware image. Device will reboot after flashing.</small>
+    <div class="row">
+      <input type="file" id="file1" accept=".bin" />
+      <button id="send1">Upload</button>
+    </div>
+    <div style="margin:12px 0;">
+      <progress id="prog1" value="0" max="100"></progress>
+    </div>
+    <div id="status1"></div>
+  </div>
+
+  <div class="card">
+    <h2>Upload LittleFS Image</h2>
+    <small>Send a <code>.bin</code> LittleFS image. Device will reboot after flashing.</small>
+    <div class="row" style="margin-top:12px;">
+      <input type="file" id="file2" accept=".bin" />
+      <button id="send2">Upload</button>
+    </div>
+    <div style="margin:12px 0;">
+      <progress id="prog2" value="0" max="100"></progress>
+    </div>
+    <div id="status2"></div>
+  </div>
+
+
   <script>
-    document.getElementById('uploadForm').onsubmit = async function(e) {
-      e.preventDefault();
-      const formData = new FormData(uploadForm);
-      const res = await fetch('/upload', { method: 'POST', body: formData });
-      document.getElementById('result').innerText = await res.text();
-    };
+    const fileElfw = document.getElementById('file1');
+    const sendBtnfw = document.getElementById('send1');
+    const statusElfw = document.getElementById('status1');
+    const progElfw = document.getElementById('prog1');
+
+    const fileElfs = document.getElementById('file2');
+    const sendBtnfs = document.getElementById('send2');
+    const statusElfs = document.getElementById('status2');
+    const progElfs = document.getElementById('prog2');
+
+
+    const human = n => (n / 1024 / 1024).toFixed(2) + " MB";
+
+    sendBtnfw.addEventListener('click', () => {
+      const f = fileElfw.files && fileElfw.files[0];
+      if (!f) { statusElfw.textContent = "Pick a .bin first"; return; }
+
+      statusElfw.textContent = `Uploading ${f.name} (${human(f.size)})...`;
+      sendBtnfw.disabled = true;
+
+      // Use XHR for upload progress events; body is raw binary
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload', true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = (e.loaded / e.total) * 100;
+          progElfw.value = pct;
+        }
+      };
+      xhr.onload = () => {
+        sendBtnfw.disabled = false;
+        if (xhr.status === 200) {
+          progElfw.value = 100;
+          statusElfw.textContent = "Upload successful, device will reboot...";
+        } else {
+          statusElfw.textContent = "Upload failed: HTTP " + xhr.status + " — " + xhr.responseText;
+        }
+      };
+      xhr.onerror = () => {
+        sendBtnfw.disabled = false;
+        statusElfw.textContent = "Network error during upload.";
+      };
+      xhr.send(f);
+    });
+
+    sendBtnfs.addEventListener('click', () => {
+      const f = fileElfs.files && fileElfs.files[0];
+      if (!f) { statusElfs.textContent = "Pick a .bin first"; return; }
+
+      statusElfs.textContent = `Uploading ${f.name} (${human(f.size)})...`;
+      sendBtnfs.disabled = true;
+      progElfs.value = 0;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/uploadfs', true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream'); // raw bytes
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) progElfs.value = (e.loaded / e.total) * 100;
+      };
+      xhr.onload = () => {
+        sendBtnfs.disabled = false;
+        if (xhr.status === 200) {
+          progElfs.value = 100;
+          statusElfs.textContent = "Filesystem flashed. Rebooting...";
+        } else if (xhr.status === 413) {
+          statusElfs.textContent = "Image larger than LittleFS partition.";
+        } else {
+          statusElfs.textContent = "Upload failed: HTTP " + xhr.status + " — " + xhr.responseText;
+        }
+      };
+      xhr.onerror = () => {
+        sendBtnfs.disabled = false;
+        statusElfs.textContent = "Network error during upload.";
+      };
+      xhr.send(f);
+    });
+
   </script>
 </body>
+
 </html>

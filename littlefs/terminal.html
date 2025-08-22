@@ -13,7 +13,6 @@
       transition: background-color 0.4s ease, color 0.4s ease;
     }
 
-    /* Terminal Box */
     #term {
       white-space: pre-wrap;
       padding: 12px;
@@ -22,9 +21,9 @@
       font-size: 14px;
       line-height: 1.4;
       transition: all 0.4s ease;
+      font-family: monospace;
     }
 
-    /* Controls Section */
     .controls {
       display: flex;
       align-items: center;
@@ -51,17 +50,50 @@
       transition: all 0.3s ease, box-shadow 0.3s ease;
     }
 
-    /* Theme Toggle Button */
-    #themeToggle {
+    #themeToggle, #sendBtn, #clearHistory {
       padding: 8px 12px;
-      white-space: nowrap;
       transition: all 0.4s ease, box-shadow 0.4s ease, color 0.4s ease, background-color 0.4s ease, border 0.4s ease;
     }
 
-    /* Send Button */
-    #sendBtn {
-      padding: 8px 14px;
-      transition: background-color 0.2s ease;
+    #connectionStatus {
+      padding: 6px 10px;
+      font-weight: bold;
+      border-radius: 6px;
+      font-size: 12px;
+      margin: 0 8px;
+      border: 2px solid;
+      transition: all 0.4s ease;
+    }
+    .connected {
+      color: #00ff99;
+      border-color: #00ff99;
+    }
+    .disconnected {
+      color: #ff4d4d;
+      border-color: #ff4d4d;
+    }
+    /* Autocomplete dropdown */
+    #autocomplete {
+      position: absolute;
+      bottom: 55px;
+      left: 8px;
+      right: 8px;
+      background: #222;
+      border: 1px solid #555;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 14px;
+      font-family: monospace; /* 👈 ensure < > display correctly */
+      white-space: pre;
+      z-index: 1000;
+      display: none;
+    }
+    #autocomplete div {
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    #autocomplete div:hover {
+      background: #444;
     }
 
     /* Modern Dark Theme */
@@ -87,12 +119,14 @@
       border-color: #00ff99;
       box-shadow: 0 0 5px #00ff99;
     }
-    body.modern #sendBtn {
+    body.modern #sendBtn,
+    body.modern #clearHistory {
       background-color: #00ff99;
       color: #000;
       border: none;
     }
-    body.modern #sendBtn:hover {
+    body.modern #sendBtn:hover,
+    body.modern #clearHistory:hover {
       background-color: #00cc7a;
     }
     body.modern #themeToggle {
@@ -131,12 +165,14 @@
       border-color: #00ff99;
       box-shadow: 0 0 8px #00ff99;
     }
-    body.retro #sendBtn {
+    body.retro #sendBtn,
+    body.retro #clearHistory {
       background-color: #00ff00;
       color: #000;
       border: none;
     }
-    body.retro #sendBtn:hover {
+    body.retro #sendBtn:hover,
+    body.retro #clearHistory:hover {
       background-color: #00cc00;
     }
     body.retro #themeToggle {
@@ -159,22 +195,35 @@
 </head>
 <body>
   <div id="term"></div>
+
+  <div id="autocomplete"></div>
   
   <div class="controls">
     <button id="themeToggle">Switch to Retro</button>
+    <div id="connectionStatus"></div>
     <input id="input" autocomplete="off" placeholder="Type a command...">
-    <button id="sendBtn" onclick="send(event)">Send</button>
+    <label>
+      <input type="checkbox" id="autoWrap"> Auto wrap &lt; &gt;
+    </label>
+    <button id="sendBtn">Send</button>
+    <button id="clearHistory">Clear History</button>
   </div>
 
   <script>
     const toggleBtn = document.getElementById('themeToggle');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearHistory');
+    const autoWrap = document.getElementById('autoWrap');
+    const autocompleteBox = document.getElementById('autocomplete');
+    const connectionStatusEl = document.getElementById('connectionStatus');
+    let history = JSON.parse(localStorage.getItem('history') || '[]');
 
     // Load saved theme
     const savedTheme = localStorage.getItem('theme') || 'modern';
     document.body.classList.add(savedTheme);
     updateToggleText(savedTheme);
 
-    // Theme toggle logic
     toggleBtn.addEventListener('click', () => {
       document.body.classList.toggle('modern');
       document.body.classList.toggle('retro');
@@ -197,16 +246,86 @@
           term.scrollTop = term.scrollHeight;
         });
     }
-    setInterval(update, 1000);
+    setInterval(update, 200);
     update();
+
+    // Fetch connection status
+    function updateStatus() {
+      fetch('/status')
+        .then(r => r.json())
+        .then(data => {
+          if (data.connected) {
+            connectionStatusEl.textContent = 'CONNECTED';
+            connectionStatusEl.className = 'connected';
+          } else {
+            connectionStatusEl.textContent = 'DISCONNECTED';
+            connectionStatusEl.className = 'disconnected';
+          }
+        }).catch(err => {
+            connectionStatusEl.textContent = 'ERROR';
+            connectionStatusEl.className = 'disconnected';
+        });
+    }
+    setInterval(updateStatus, 1000);
+    updateStatus();
 
     // Send command
     function send(e) {
-      e.preventDefault();
-      const input = document.getElementById('input');
-      fetch('/serial', { method: 'POST', body: input.value });
+      if (e) e.preventDefault();
+      let value = input.value.trim();
+      if (!value) return;
+
+      // Auto-wrap with < >
+      if (autoWrap.checked) {
+        if (!value.startsWith('<')) value = '<' + value;
+        if (!value.endsWith('>')) value = value + '>';
+      }
+
+      fetch('/serial', { method: 'POST', body: value });
+      update();
+      
+      // Store in history if unique
+      if (!history.includes(value)) {
+        history.push(value);
+        localStorage.setItem('history', JSON.stringify(history));
+      }
       input.value = '';
+      autocompleteBox.style.display = 'none';
     }
+
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') send(e);
+    });
+
+    // Autocomplete
+    input.addEventListener('input', () => {
+      const value = input.value.trim();
+      if (!value) {
+        autocompleteBox.style.display = 'none';
+        return;
+      }
+      const matches = history.filter(h => h.includes(value));
+      if (matches.length === 0) {
+        autocompleteBox.style.display = 'none';
+        return;
+      }
+      autocompleteBox.innerHTML = matches.map(m => `<div>${m}</div>`).join('');
+      autocompleteBox.style.display = 'block';
+      autocompleteBox.querySelectorAll('div').forEach(div => {
+        div.addEventListener('click', () => {
+          input.value = div.textContent;
+          autocompleteBox.style.display = 'none';
+        });
+      });
+    });
+
+    // Clear history
+    clearBtn.addEventListener('click', () => {
+      history = [];
+      localStorage.removeItem('history');
+      autocompleteBox.style.display = 'none';
+    });
   </script>
 </body>
 </html>

@@ -7,6 +7,9 @@
 #define WIFI_SSID "SSID"
 #define WIFI_PASSWORD "password"
 
+// Password for web interface upload pages
+#define HTTP_PASSWORD "admin"
+
 
 // Change these values to match your needs
 #define BAUDRATE (115200)
