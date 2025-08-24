@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>ESP Terminal - Theme Toggle</title>
@@ -50,7 +51,9 @@
       transition: all 0.3s ease, box-shadow 0.3s ease;
     }
 
-    #themeToggle, #sendBtn, #clearHistory {
+    #themeToggle,
+    #sendBtn,
+    #clearHistory {
       padding: 8px 12px;
       transition: all 0.4s ease, box-shadow 0.4s ease, color 0.4s ease, background-color 0.4s ease, border 0.4s ease;
     }
@@ -64,36 +67,15 @@
       border: 2px solid;
       transition: all 0.4s ease;
     }
+
     .connected {
       color: #00ff99;
       border-color: #00ff99;
     }
+
     .disconnected {
       color: #ff4d4d;
       border-color: #ff4d4d;
-    }
-    /* Autocomplete dropdown */
-    #autocomplete {
-      position: absolute;
-      bottom: 55px;
-      left: 8px;
-      right: 8px;
-      background: #222;
-      border: 1px solid #555;
-      max-height: 150px;
-      overflow-y: auto;
-      font-size: 14px;
-      font-family: monospace; /* 👈 ensure < > display correctly */
-      white-space: pre;
-      z-index: 1000;
-      display: none;
-    }
-    #autocomplete div {
-      padding: 4px 8px;
-      cursor: pointer;
-    }
-    #autocomplete div:hover {
-      background: #444;
     }
 
     /* Modern Dark Theme */
@@ -101,40 +83,48 @@
       background-color: #1e1e1e;
       color: #e0e0e0;
     }
+
     body.modern #term {
       background-color: #0d0d0d;
       border: 2px solid #444;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
     }
+
     body.modern .controls {
       background-color: #1c1c1c;
       border-color: #444;
     }
+
     body.modern input {
       background-color: #1c1c1c;
       border: 1px solid #555;
       color: #fff;
     }
+
     body.modern input:focus {
       border-color: #00ff99;
       box-shadow: 0 0 5px #00ff99;
     }
+
     body.modern #sendBtn,
     body.modern #clearHistory {
       background-color: #00ff99;
       color: #000;
       border: none;
     }
+
     body.modern #sendBtn:hover,
     body.modern #clearHistory:hover {
       background-color: #00cc7a;
     }
+
     body.modern #themeToggle {
       background-color: #00ff99;
       color: #000;
       border: none;
       box-shadow: 0 0 8px #00ff99;
     }
+
     body.modern #themeToggle:hover {
       background-color: #00cc7a;
     }
@@ -144,6 +134,7 @@
       background-color: #000;
       color: #00ff00;
     }
+
     body.retro #term {
       background-color: #000;
       border: 2px solid #00ff00;
@@ -151,59 +142,96 @@
       box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.3);
       animation: flicker 1.5s infinite alternate;
     }
+
     body.retro .controls {
       background-color: #000;
       border-color: #00ff00;
     }
+
     body.retro input {
       background-color: #000;
       border: 1px solid #00ff00;
       color: #00ff00;
       text-shadow: 0 0 5px #00ff00;
     }
+
     body.retro input:focus {
       border-color: #00ff99;
       box-shadow: 0 0 8px #00ff99;
     }
+
     body.retro #sendBtn,
     body.retro #clearHistory {
       background-color: #00ff00;
       color: #000;
       border: none;
     }
+
     body.retro #sendBtn:hover,
     body.retro #clearHistory:hover {
       background-color: #00cc00;
     }
+
     body.retro #themeToggle {
       background-color: #000;
       color: #00ff00;
       border: 2px solid #00ff00;
       text-shadow: 0 0 5px #00ff00;
-      box-shadow: 0 0 15px rgba(0,255,0,0.5);
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
     }
+
     body.retro #themeToggle:hover {
       background-color: #002200;
     }
 
     @keyframes flicker {
-      0% { opacity: 1; }
-      50% { opacity: 0.97; }
-      100% { opacity: 1; }
+      0% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.97;
+      }
+
+      100% {
+        opacity: 1;
+      }
+    }
+
+    #history-box {
+      box-sizing: border-box;
+      padding: 8px 12px;
+      height: 120px; /* Approx 5 lines */
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.4;
+      font-family: monospace;
+      white-space: pre;
+      border-top: 2px solid;
+    }
+
+    body.modern #history-box {
+      background-color: #1c1c1c;
+      border-color: #444;
+    }
+
+    body.retro #history-box {
+      background-color: #000;
+      border-color: #00ff00;
+      text-shadow: 0 0 5px #00ff00;
     }
   </style>
 </head>
+
 <body>
   <div id="term"></div>
-
-  <div id="autocomplete"></div>
-  
+  <div id="history-box"></div>
   <div class="controls">
     <button id="themeToggle">Switch to Retro</button>
     <div id="connectionStatus"></div>
-    <input id="input" autocomplete="off" placeholder="Type a command...">
+    <input id="input" autocomplete="off" placeholder="Type a command..."></input>
     <label>
-      <input type="checkbox" id="autoWrap"> Auto wrap &lt; &gt;
+      <input type="checkbox" id="autoWrap"> Auto wrap &lt; &gt; </input>
     </label>
     <button id="sendBtn">Send</button>
     <button id="clearHistory">Clear History</button>
@@ -215,9 +243,11 @@
     const sendBtn = document.getElementById('sendBtn');
     const clearBtn = document.getElementById('clearHistory');
     const autoWrap = document.getElementById('autoWrap');
-    const autocompleteBox = document.getElementById('autocomplete');
+    const historyBox = document.getElementById('history-box');
     const connectionStatusEl = document.getElementById('connectionStatus');
     let history = JSON.parse(localStorage.getItem('history') || '[]');
+    let historyIndex = history.length;
+    let ws;
 
     // Load saved theme
     const savedTheme = localStorage.getItem('theme') || 'modern';
@@ -225,49 +255,70 @@
     updateToggleText(savedTheme);
 
     toggleBtn.addEventListener('click', () => {
-      document.body.classList.toggle('modern');
-      document.body.classList.toggle('retro');
-      const newTheme = document.body.classList.contains('modern') ? 'modern' : 'retro';
-      updateToggleText(newTheme);
-      localStorage.setItem('theme', newTheme);
+        document.body.classList.toggle('modern');
+        document.body.classList.toggle('retro');
+        const newTheme = document.body.classList.contains('modern') ? 'modern' : 'retro';
+        updateToggleText(newTheme);
+        localStorage.setItem('theme', newTheme);
     });
 
     function updateToggleText(theme) {
-      toggleBtn.textContent = theme === 'modern' ? 'Switch to Retro' : 'Switch to Modern';
+        toggleBtn.textContent = theme === 'modern' ? 'Switch to Retro' : 'Switch to Modern';
     }
 
-    // Fetch terminal data
-    function update() {
-      fetch('/serial')
-        .then(r => r.text())
-        .then(t => {
-          const term = document.getElementById('term');
-          term.textContent = t.replace(/\r\n|\r|\n/g, '\n');
-          term.scrollTop = term.scrollHeight;
-        });
-    }
-    setInterval(update, 200);
-    update();
+    function connect() {
+        const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(`${proto}://${window.location.host}/ws`);
 
-    // Fetch connection status
-    function updateStatus() {
-      fetch('/status')
-        .then(r => r.json())
-        .then(data => {
-          if (data.connected) {
-            connectionStatusEl.textContent = 'CONNECTED';
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            connectionStatusEl.textContent = '...';
+            connectionStatusEl.className = '';
+            // Server will send USB status upon connection.
+        };
+
+        ws.onmessage = (event) => {
+            const data = event.data;
+            try {
+                const json = JSON.parse(data);
+                if (json.type === 'status') {
+                    updateStatus(json.connected);
+                    return;
+                }
+            } catch (e) {
+                // Not a JSON status message, treat as terminal data
+            }
+
+            const term = document.getElementById('term');
+            term.textContent += data.replace(/\r\n|\r|\n/g, '\n');
+            term.scrollTop = term.scrollHeight;
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected. Reconnecting in 1s...');
+            connectionStatusEl.textContent = 'SERVER DISCONNECTED';
+            connectionStatusEl.className = 'disconnected';
+            setTimeout(connect, 1000);
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket Error:', error);
+            ws.close(); // This will trigger onclose and reconnection logic
+        };
+    }
+
+    function updateStatus(connected) {
+        if (connected) {
+            connectionStatusEl.textContent = 'USB CONNECTED';
             connectionStatusEl.className = 'connected';
           } else {
-            connectionStatusEl.textContent = 'DISCONNECTED';
+            connectionStatusEl.textContent = 'USB DISCONNECTED';
             connectionStatusEl.className = 'disconnected';
           }
-        }).catch(err => {
-            connectionStatusEl.textContent = 'ERROR';
-            connectionStatusEl.className = 'disconnected';
-        });
     }
-    setInterval(updateStatus, 1000);
-    updateStatus();
+
+    // Initial connection
+    connect();
 
     // Send command
     function send(e) {
@@ -280,52 +331,77 @@
         if (!value.startsWith('<')) value = '<' + value;
         if (!value.endsWith('>')) value = value + '>';
       }
+      console.log('Sending command: ' + value);
 
-      fetch('/serial', { method: 'POST', body: value });
-      update();
-      
-      // Store in history if unique
-      if (!history.includes(value)) {
-        history.push(value);
-        localStorage.setItem('history', JSON.stringify(history));
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(value);
+      } else {
+        console.error('WebSocket is not connected.');
       }
+
+      // Save unique history
+      history = history.filter(cmd => cmd !== value);
+      history.push(value);
+      localStorage.setItem("history", JSON.stringify(history));
+      historyIndex = history.length;
+
       input.value = '';
-      autocompleteBox.style.display = 'none';
+      updateHistoryDisplay();
     }
 
     sendBtn.addEventListener('click', send);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') send(e);
-    });
 
-    // Autocomplete
-    input.addEventListener('input', () => {
-      const value = input.value.trim();
-      if (!value) {
-        autocompleteBox.style.display = 'none';
-        return;
-      }
-      const matches = history.filter(h => h.includes(value));
-      if (matches.length === 0) {
-        autocompleteBox.style.display = 'none';
-        return;
-      }
-      autocompleteBox.innerHTML = matches.map(m => `<div>${m}</div>`).join('');
-      autocompleteBox.style.display = 'block';
-      autocompleteBox.querySelectorAll('div').forEach(div => {
-        div.addEventListener('click', () => {
-          input.value = div.textContent;
-          autocompleteBox.style.display = 'none';
-        });
+    function updateHistoryDisplay() {
+      historyBox.innerHTML = '';
+      const recentHistory = history.slice(-5);
+      recentHistory.forEach(cmd => {
+        const div = document.createElement('div');
+        div.textContent = cmd;
+        div.style.cursor = 'pointer';
+        div.onclick = () => {
+          input.value = cmd;
+          input.focus();
+        };
+        historyBox.appendChild(div);
       });
+    }
+
+    // Keyboard navigation
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        send(e);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (historyIndex > 0) {
+          historyIndex--;
+          input.value = history[historyIndex];
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (historyIndex < history.length - 1) {
+          historyIndex++;
+          input.value = history[historyIndex];
+          input.setSelectionRange(input.value.length, input.value.length);
+        } else if (historyIndex === history.length - 1) {
+          historyIndex++;
+          input.value = "";
+        }
+      }
     });
 
-    // Clear history
-    clearBtn.addEventListener('click', () => {
-      history = [];
-      localStorage.removeItem('history');
-      autocompleteBox.style.display = 'none';
+    // Clear history button
+    clearBtn.addEventListener("click", () => {
+      if (confirm("Clear all command history?")) {
+        history = [];
+        localStorage.removeItem("history");
+        updateHistoryDisplay();
+      }
     });
+
+    // Show history list initially
+    updateHistoryDisplay();
   </script>
 </body>
+
 </html>

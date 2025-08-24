@@ -2,6 +2,8 @@
 #define _USB_HANDLER_H
 
 #include <memory>
+#include <functional>
+#include <string>
 
 #include "config.h"
 #include "esp_log.h"
@@ -19,9 +21,11 @@
 class UsbHandler
 {
 private:
-  char serial_buffer[1024];
-  size_t serial_buffer_len = 0;
-  SemaphoreHandle_t serial_buffer_mutex;
+  // Callback for received data
+  std::function<void(const uint8_t* data, size_t len)> rx_callback;
+  // Callback for connection status changes
+  std::function<void(bool connected)> connection_callback;
+
   SemaphoreHandle_t device_disconnected_sem;
   std::unique_ptr<CdcAcmDevice> vcp;
 
@@ -31,11 +35,12 @@ private:
 
 public:
   UsbHandler();
-  virtual ~UsbHandler() {};
+  virtual ~UsbHandler();
 
   void usb_loop();
   esp_err_t tx_blocking(uint8_t *data, size_t len);
-  esp_err_t serial_get_handler(httpd_req_t *req);
+  void set_rx_callback(std::function<void(const uint8_t* data, size_t len)> cb);
+  void set_connection_callback(std::function<void(bool connected)> cb);
   bool isConnected() { return vcp != nullptr; }
 };
 

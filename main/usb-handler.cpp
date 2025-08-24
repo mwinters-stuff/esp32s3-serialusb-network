@@ -35,21 +35,11 @@ using namespace esp_usb;
  */
 bool UsbHandler::handle_rx(const uint8_t *data, size_t data_len, void *arg)
 {
-  // ESP_LOGI(TAG, "handle_rx called, data_len=%d", (int)data_len);
-  printf("%.*s", (int)data_len, data);
-
-  // Buffer the data for web interface
-  xSemaphoreTake(serial_buffer_mutex, portMAX_DELAY);
-  size_t copy_len = data_len;
-  if (serial_buffer_len + copy_len > sizeof(serial_buffer))
+  ESP_LOGI(TAG, "handle_rx called, data_len=%d", (int)data_len);
+  if (data_len > 0 && rx_callback)
   {
-    // If buffer full, reset
-    serial_buffer_len = 0;
-    copy_len = data_len < sizeof(serial_buffer) ? data_len : sizeof(serial_buffer);
+    rx_callback(data, data_len);
   }
-  memcpy(serial_buffer + serial_buffer_len, data, copy_len);
-  serial_buffer_len += copy_len;
-  xSemaphoreGive(serial_buffer_mutex);
 
   return true;
 }
@@ -110,10 +100,11 @@ UsbHandler::UsbHandler()
 {
   device_disconnected_sem = xSemaphoreCreateBinary();
   assert(device_disconnected_sem);
+}
 
-  serial_buffer_mutex = xSemaphoreCreateMutex();
-  assert(serial_buffer_mutex);
-  serial_buffer_len = 0;
+UsbHandler::~UsbHandler()
+{
+  vSemaphoreDelete(device_disconnected_sem);
 }
 
 void UsbHandler::usb_loop()
@@ -148,8 +139,8 @@ void UsbHandler::usb_loop()
   {
     const cdc_acm_host_device_config_t dev_config = {
         .connection_timeout_ms = 5000,
-        .out_buffer_size = 64,
-        .in_buffer_size = 64,
+        .out_buffer_size = 256,
+        .in_buffer_size = 256,
         .event_cb = [](const cdc_acm_host_dev_event_data_t *event, void *user_ctx)
         { static_cast<UsbHandler *>(user_ctx)->handle_event(event, user_ctx); },
 
@@ -168,6 +159,10 @@ void UsbHandler::usb_loop()
       continue;
     }
 
+    if (connection_callback) {
+        connection_callback(true);
+    }
+
     ESP_LOGI(TAG, "Setting up line coding");
     cdc_acm_line_coding_t line_coding = {
         .dwDTERate = BAUDRATE,
@@ -182,10 +177,13 @@ void UsbHandler::usb_loop()
     // Stay connected and process data until device is disconnected
     xSemaphoreTake(device_disconnected_sem, portMAX_DELAY);
 
+    if (connection_callback) {
+        connection_callback(false);
+    }
+
     ESP_LOGI(TAG, "VCP device disconnected. Cleaning up...");
     vcp.reset();
-    // Optionally clear serial buffer here if desired
-    serial_buffer_len = 0;
+
   }
 }
 
@@ -198,10 +196,12 @@ esp_err_t UsbHandler::tx_blocking(uint8_t *data, size_t len)
   return ESP_FAIL;
 }
 
-esp_err_t UsbHandler::serial_get_handler(httpd_req_t *req)
+void UsbHandler::set_rx_callback(std::function<void(const uint8_t* data, size_t len)> cb)
 {
-  xSemaphoreTake(serial_buffer_mutex, portMAX_DELAY);
-  auto error = httpd_resp_send(req, serial_buffer, serial_buffer_len);
-  xSemaphoreGive(serial_buffer_mutex);
-  return error;
+    rx_callback = cb;
+}
+
+void UsbHandler::set_connection_callback(std::function<void(bool connected)> cb)
+{
+    connection_callback = cb;
 }
