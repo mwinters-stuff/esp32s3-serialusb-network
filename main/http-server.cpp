@@ -22,7 +22,7 @@
 
 static const char *TAG = "HTTP";
 
-HttpServer::HttpServer(std::shared_ptr<UsbHandler> usbHandler) : usbHandler(usbHandler)
+HttpServer::HttpServer(std::shared_ptr<UsbHandler> usbHandler, std::shared_ptr<LedIndicator> led) : usbHandler(usbHandler), ledIndicator(led)
 {
   ws_clients_mutex = xSemaphoreCreateMutex();
   assert(ws_clients_mutex);
@@ -108,6 +108,8 @@ esp_err_t HttpServer::firmware_upload_handler(httpd_req_t *req)
     httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Not authenticated");
     return ESP_FAIL;
   }
+
+  if (ledIndicator) ledIndicator->setState(LedState::UPLOADING);
 
   esp_err_t err;
   const size_t content_len = req->content_len;
@@ -282,6 +284,11 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
       // Check for duplicates in case of rapid reconnects.
       if (std::find(ws_clients.begin(), ws_clients.end(), fd) == ws_clients.end())
       {
+        // If this is the first client, change the LED state
+        if (ws_clients.empty() && ledIndicator)
+        {
+          ledIndicator->setState(LedState::WEB_TERMINAL_ACTIVE);
+        }
         ws_clients.push_back(fd);
       }
       xSemaphoreGive(ws_clients_mutex);
@@ -384,6 +391,8 @@ esp_err_t HttpServer::fs_upload_handler(httpd_req_t *req)
     httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Not authenticated");
     return ESP_FAIL;
   }
+
+  if (ledIndicator) ledIndicator->setState(LedState::UPLOADING);
 
   esp_err_t err;
 
@@ -545,6 +554,33 @@ esp_err_t HttpServer::login_post_handler(httpd_req_t *req)
   return ESP_OK;
 }
 
+void HttpServer::handle_client_close(int sockfd)
+{
+  if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) == pdTRUE)
+  {
+    auto it = std::find(ws_clients.begin(), ws_clients.end(), sockfd);
+    if (it != ws_clients.end())
+    {
+      ws_clients.erase(it);
+      ESP_LOGI(TAG, "WS client on fd %d disconnected. Remaining clients: %zu", sockfd, ws_clients.size());
+      // If this was the last client, revert the state.
+      if (ws_clients.empty() && ledIndicator)
+      {
+        // Revert to USB_CONNECTED or IDLE based on the current USB status
+        if (usbHandler && usbHandler->isConnected())
+        {
+          ledIndicator->setState(LedState::USB_CONNECTED);
+        }
+        else
+        {
+          ledIndicator->setState(LedState::IDLE);
+        }
+      }
+    }
+    xSemaphoreGive(ws_clients_mutex);
+  }
+}
+
 httpd_handle_t HttpServer::start()
 {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -555,6 +591,16 @@ httpd_handle_t HttpServer::start()
   // config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 10;
   config.lru_purge_enable = true;
+
+  // Set up a function to be called when a client socket is closed
+  config.global_user_ctx = this;
+  config.close_fn = [](httpd_handle_t hd, int sockfd) {
+    auto *self = static_cast<HttpServer *>(httpd_get_global_user_ctx(hd));
+    if (self)
+    {
+      self->handle_client_close(sockfd);
+    }
+  };
 
   if (httpd_start(&this->server, &config) == ESP_OK)
   {

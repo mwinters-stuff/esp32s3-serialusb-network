@@ -13,6 +13,7 @@
 #include "usb/cdc_acm_host.h"
 
 #include "usb-handler.h"
+#include "led_indicator.h"
 
 class HttpServer
 {
@@ -22,6 +23,7 @@ private:
   std::vector<int> ws_clients;
   SemaphoreHandle_t ws_clients_mutex;
   bool isUSBConnected = false;
+  std::shared_ptr<LedIndicator> ledIndicator;
 
   void broadcast(const uint8_t *data, size_t len);
 
@@ -37,8 +39,10 @@ private:
   esp_err_t login_post_handler(httpd_req_t *req);
 
   bool is_authenticated(httpd_req_t *req);
+
+  void handle_client_close(int sockfd);
 public:
-  HttpServer(std::shared_ptr<UsbHandler> usbHandler);
+  HttpServer(std::shared_ptr<UsbHandler> usbHandler, std::shared_ptr<LedIndicator> led);
   virtual ~HttpServer();
 
   httpd_handle_t start();

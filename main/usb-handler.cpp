@@ -96,7 +96,7 @@ void UsbHandler::usb_lib_task(void *arg)
   }
 }
 
-UsbHandler::UsbHandler()
+UsbHandler::UsbHandler(std::shared_ptr<LedIndicator> led) : ledIndicator(led)
 {
   device_disconnected_sem = xSemaphoreCreateBinary();
   assert(device_disconnected_sem);
@@ -159,6 +159,8 @@ void UsbHandler::usb_loop()
       continue;
     }
 
+    ledIndicator->setState(LedState::USB_CONNECTED);
+
     if (connection_callback) {
         connection_callback(true);
     }
@@ -176,6 +178,8 @@ void UsbHandler::usb_loop()
     ESP_LOGI(TAG, "VCP device connected. Waiting for disconnection...");
     // Stay connected and process data until device is disconnected
     xSemaphoreTake(device_disconnected_sem, portMAX_DELAY);
+
+    ledIndicator->setState(LedState::IDLE);
 
     if (connection_callback) {
         connection_callback(false);

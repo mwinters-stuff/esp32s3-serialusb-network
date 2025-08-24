@@ -1,5 +1,6 @@
 
 #include <algorithm>
+#include <memory>
 #include <stdio.h>
 #include <string.h>
 
@@ -13,8 +14,11 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
-void wifi_init_sta()
+#include "led_indicator.h"
+
+void wifi_init_sta(std::shared_ptr<LedIndicator> ledIndicator)
 {
+    ledIndicator->setState(LedState::WIFI_DISCONNECTED);
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -43,17 +47,22 @@ void wifi_init_sta()
     ESP_LOGI("wifi", "Waiting for connection...");
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
-                                                        {
-                                                        if (event_id == WIFI_EVENT_STA_CONNECTED) {
-                                                            ESP_LOGI("wifi", "Connected to AP");
-                                                        } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
-                                                            ESP_LOGW("wifi", "Disconnected from AP");
-                                                        } }, NULL, &instance_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
-                                                        {
-                                                        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-                                                        ESP_LOGI("wifi", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip)); }, NULL, &instance_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+        auto led = static_cast<LedIndicator *>(arg);
+        if (event_id == WIFI_EVENT_STA_CONNECTED)
+        {
+            ESP_LOGI("wifi", "Connected to AP");
+        }
+        else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
+        {
+            ESP_LOGW("wifi", "Disconnected from AP");
+            if (led) led->setState(LedState::WIFI_DISCONNECTED);
+        } }, ledIndicator.get(), &instance_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, [](void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+        auto led = static_cast<LedIndicator *>(arg);
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        ESP_LOGI("wifi", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        if (led) led->setState(LedState::IDLE); }, ledIndicator.get(), &instance_got_ip));
 
     // Wait until got IP
     while (true)

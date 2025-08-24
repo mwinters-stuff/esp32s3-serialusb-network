@@ -18,6 +18,8 @@
 #include "usb/vcp_cp210x.hpp"
 #include "usb/vcp_ftdi.hpp"
 
+#include "led_indicator.h"
+
 class UsbHandler
 {
 private:
@@ -28,13 +30,14 @@ private:
 
   SemaphoreHandle_t device_disconnected_sem;
   std::unique_ptr<CdcAcmDevice> vcp;
+  std::shared_ptr<LedIndicator> ledIndicator;
 
   bool handle_rx(const uint8_t *data, size_t data_len, void *arg);
   void handle_event(const cdc_acm_host_dev_event_data_t *event, void *user_ctx);
   void usb_lib_task(void *arg);
 
 public:
-  UsbHandler();
+  UsbHandler(std::shared_ptr<LedIndicator> led);
   virtual ~UsbHandler();
 
   void usb_loop();
