@@ -202,6 +202,8 @@
       box-sizing: border-box;
       padding: 8px 12px;
       height: 120px; /* Approx 5 lines */
+      min-height: 120px;
+      max-height: 500px;
       overflow-y: auto;
       font-size: 13px;
       line-height: 1.4;
@@ -220,11 +222,19 @@
       border-color: #00ff00;
       text-shadow: 0 0 5px #00ff00;
     }
+
+    #divider {
+      background: linear-gradient(90deg, #444 0%, #888 100%);
+      height: 6px;
+      cursor: row-resize;
+      width: 100%;
+    }
   </style>
 </head>
 
 <body>
   <div id="term"></div>
+  <div id="divider"></div>
   <div id="history-box"></div>
   <div class="controls">
     <button id="themeToggle">Switch to Retro</button>
@@ -236,7 +246,6 @@
     <button id="sendBtn">Send</button>
     <button id="clearHistory">Clear History</button>
   </div>
-
   <script>
     const toggleBtn = document.getElementById('themeToggle');
     const input = document.getElementById('input');
@@ -320,6 +329,9 @@
     // Initial connection
     connect();
 
+    // Show history immediately on page load
+    updateHistoryDisplay();
+
     // Send command
     function send(e) {
       if (e) e.preventDefault();
@@ -399,8 +411,43 @@
       }
     });
 
-    // Show history list initially
-    updateHistoryDisplay();
+    // --- Divider Drag Logic ---
+    const term = document.getElementById('term');
+    const divider = document.getElementById('divider');
+
+    let isDragging = false;
+    let startY = 0;
+    let startTermHeight = 0;
+
+    divider.addEventListener('mousedown', function(e) {
+      isDragging = true;
+      startY = e.clientY;
+      startTermHeight = term.offsetHeight;
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      let delta = e.clientY - startY;
+      let newTermHeight = startTermHeight + delta;
+      // Clamp heights
+      newTermHeight = Math.max(60, Math.min(window.innerHeight - 180, newTermHeight));
+      term.style.height = newTermHeight + 'px';
+      // Adjust historyBox height accordingly
+      let controlsHeight = document.querySelector('.controls').offsetHeight;
+      let dividerHeight = divider.offsetHeight;
+      let newHistoryHeight = window.innerHeight - newTermHeight - controlsHeight - dividerHeight;
+      newHistoryHeight = Math.max(60, newHistoryHeight);
+      historyBox.style.height = newHistoryHeight + 'px';
+    });
+
+    document.addEventListener('mouseup', function(e) {
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.userSelect = '';
+      }
+    });
+    // --- End Divider Drag Logic ---
   </script>
 </body>
 
