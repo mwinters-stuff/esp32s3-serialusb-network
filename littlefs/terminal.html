@@ -365,8 +365,7 @@
 
     function updateHistoryDisplay() {
       historyBox.innerHTML = '';
-      const recentHistory = history.slice(-5);
-      recentHistory.forEach(cmd => {
+      history.forEach(cmd => {
         const div = document.createElement('div');
         div.textContent = cmd;
         div.style.cursor = 'pointer';
