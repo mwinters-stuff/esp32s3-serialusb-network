@@ -1,15 +1,30 @@
 {
   "C_Cpp.intelliSenseEngine": "disabled",
-  "idf.espIdfPath": "/home/mathew/src/esp/esp-idf",
-  "idf.pythonInstallPath": "/usr/bin/python3",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
   "idf.port": "/dev/ttyACM0",
-  "idf.toolsPath": "/home/mathew/.espressif",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
   "idf.flashType": "UART",
-  "idf.currentSetup": "/home/mathew/.espressif/v5.5.4/esp-idf"
+  "files.autoSave": "afterDelay",
+  "idf.notificationMode": "Silent",
+  "editor.tabSize": 2,
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": true,
+  "idf.currentSetup": "/home/mathew/.espressif/v5.5.4/esp-idf",
+  "clangd.path": "/home/mathew/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=/home/mathew/src/esp32s3-serialusb-network/build"
+  ],
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.profiles.linux": {
+    "bash": {
+      "path": "/bin/bash",
+      "args": []
+    }
+  },
 }

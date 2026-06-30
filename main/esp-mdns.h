@@ -2,5 +2,6 @@
 #define _ESP_MDNS_H
 
 void initialise_mdns();
+void mdns_announce();
 
 #endif

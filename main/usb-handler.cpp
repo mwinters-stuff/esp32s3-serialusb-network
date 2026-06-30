@@ -1,21 +1,22 @@
 #include <memory>
 
-#include "config.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "freertos/task.h"
+#include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 
-#include "usb/cdc_acm_host.h"
-#include "usb/usb_host.h"
-#include "usb/vcp.hpp"
-#include "usb/vcp_ch34x.hpp"
-#include "usb/vcp_cp210x.hpp"
-#include "usb/vcp_ftdi.hpp"
+#include <usb/cdc_acm_host.h>
+#include <usb/usb_host.h>
+#include <usb/vcp.hpp>
+#include <usb/vcp_ch34x.hpp>
+#include <usb/vcp_cp210x.hpp>
+#include <usb/vcp_ftdi.hpp>
 
-#include "esp_http_server.h"
+#include <esp_http_server.h>
 
 #include "usb-handler.h"
+#include "config.h"
+
 static const char *TAG = "VCP";
 
 using namespace esp_usb;

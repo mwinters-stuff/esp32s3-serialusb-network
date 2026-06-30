@@ -2,15 +2,15 @@
 #define _HTTP_SERVER_H
 
 #include <vector>
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
-#include "esp_http_server.h"
-#include "esp_https_ota.h"
-#include "esp_log.h"
-#include "esp_ota_ops.h"
-#include "esp_partition.h"
-#include "usb/cdc_acm_host.h"
+#include <esp_http_server.h>
+#include <esp_https_ota.h>
+#include <esp_log.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+#include <usb/cdc_acm_host.h>
 
 #include "usb-handler.h"
 #include "led_indicator.h"

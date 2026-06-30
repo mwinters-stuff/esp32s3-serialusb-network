@@ -1,9 +1,11 @@
 #ifndef _LED_INDICATOR_H
 #define _LED_INDICATOR_H
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "led_strip.h"
+// IWYU pragma: keep
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <led_strip.h>
+
 
 // IMPORTANT: Configure your addressable LED GPIO here
 // Common for ESP32-S3 devkits with on-board RGB LEDs is GPIO 48
