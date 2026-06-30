@@ -101,14 +101,13 @@ bool w5500_init(std::shared_ptr<LedIndicator> ledIndicator) {
   }
 
   // Initialize SPI bus
-  spi_bus_config_t buscfg = {
-      .mosi_io_num = W5500_MOSI_PIN,
-      .miso_io_num = W5500_MISO_PIN,
-      .sclk_io_num = W5500_SCK_PIN,
-      .quadwp_io_num = -1,
-      .quadhd_io_num = -1,
-      .max_transfer_sz = 4000,
-  };
+  spi_bus_config_t buscfg = {};
+  buscfg.mosi_io_num = W5500_MOSI_PIN;
+  buscfg.miso_io_num = W5500_MISO_PIN;
+  buscfg.sclk_io_num = W5500_SCK_PIN;
+  buscfg.quadwp_io_num = -1;
+  buscfg.quadhd_io_num = -1;
+  buscfg.max_transfer_sz = 4000;
 
   esp_err_t err = spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
   if (err != ESP_OK) {
@@ -119,14 +118,13 @@ bool w5500_init(std::shared_ptr<LedIndicator> ledIndicator) {
   // W5500 SPI device config — passed to ETH_W5500_DEFAULT_CONFIG by pointer
   // command_bits/address_bits must be 0; the W5500 driver builds its own frame
   // header
-  spi_device_interface_config_t devcfg = {
-      .command_bits = 0,
-      .address_bits = 0,
-      .mode = 0,
-      .clock_speed_hz = 20 * 1000 * 1000,
-      .spics_io_num = W5500_CS_PIN,
-      .queue_size = 20,
-  };
+  spi_device_interface_config_t devcfg = {};
+  devcfg.command_bits = 0;
+  devcfg.address_bits = 0;
+  devcfg.mode = 0;
+  devcfg.clock_speed_hz = 20 * 1000 * 1000;
+  devcfg.spics_io_num = W5500_CS_PIN;
+  devcfg.queue_size = 20;
 
   // Build W5500 config using the proper macro (takes host id + devcfg pointer)
   eth_w5500_config_t w5500_config =
