@@ -137,7 +137,20 @@ void UsbHandler::usb_loop()
   // Do everything else in a loop, so we can demonstrate USB device reconnections
   while (true)
   {
-    const cdc_acm_host_device_config_t dev_config = {
+    const cdc_acm_host_device_config_t dev_config_ftdi = {
+      .connection_timeout_ms = 250,
+        .out_buffer_size = 256,
+      // FTDI VCP in esp-usb 2.1.x no longer supports non-zero RX FIFO.
+        .in_buffer_size = 0,
+        .event_cb = [](const cdc_acm_host_dev_event_data_t *event, void *user_ctx)
+        { static_cast<UsbHandler *>(user_ctx)->handle_event(event, user_ctx); },
+
+        .data_cb = [](const uint8_t *data, size_t data_len, void *user_arg)
+        { return static_cast<UsbHandler *>(user_arg)->handle_rx(data, data_len, user_arg); },
+        .user_arg = this,
+    };
+
+    const cdc_acm_host_device_config_t dev_config_generic = {
         .connection_timeout_ms = 5000,
         .out_buffer_size = 256,
         .in_buffer_size = 256,
@@ -149,8 +162,17 @@ void UsbHandler::usb_loop()
         .user_arg = this,
     };
 
-    ESP_LOGI(TAG, "Opening any VCP device...");
-    vcp = std::unique_ptr<CdcAcmDevice>(VCP::open(&dev_config));
+    ESP_LOGI(TAG, "Opening VCP device (FTDI first)...");
+    vcp = std::unique_ptr<CdcAcmDevice>(VCP::open(FTDI_VID, FT232_PID, &dev_config_ftdi));
+    if (vcp == nullptr)
+    {
+      vcp = std::unique_ptr<CdcAcmDevice>(VCP::open(FTDI_VID, FT231_PID, &dev_config_ftdi));
+    }
+    if (vcp == nullptr)
+    {
+      ESP_LOGI(TAG, "No FTDI device found, opening any supported VCP...");
+      vcp = std::unique_ptr<CdcAcmDevice>(VCP::open(&dev_config_generic));
+    }
 
     if (vcp == nullptr)
     {

@@ -1,10 +1,10 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  usb_host_ch34x_vcp: "^2"
-  usb_host_cp210x_vcp: "^2"
-  usb_host_ftdi_vcp: "^2"
-  usb_host_vcp: "^1"
-  idf: ">=5.1.0"
-  joltwallet/littlefs: "~=1.16.0"
-  espressif/mdns: "^1.0.0"
-  espressif/led_strip: "^2"
+  usb_host_ch34x_vcp: "^2.2.1"
+  usb_host_cp210x_vcp: "^2.2.0"
+  usb_host_ftdi_vcp: "^2.1.1"
+  usb_host_vcp: "^1.0.0~5"
+  idf: ">=6.0.0"
+  joltwallet/littlefs: "~=1.22.1"
+  espressif/mdns: "^1.11.2"
+  espressif/led_strip: "^3.0.0"
