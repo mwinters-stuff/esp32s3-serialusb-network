@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "led_indicator.cpp" "usb-handler.cpp" "http-server.cpp" "main.cpp" "esp-mdns.cpp" "wifi.cpp" "w5500.cpp" "littlefs.cpp"
+    SRCS "led_indicator.cpp" "usb-handler.cpp" "http-server.cpp" "main.cpp" "esp-mdns.cpp" "wifi.cpp" "w5500.cpp" "littlefs.cpp" "web-logger.cpp"
     INCLUDE_DIRS "."
     REQUIRES esp_http_server esp_wifi nvs_flash esp_https_ota app_update led_strip esp_eth driver
     PRIV_REQUIRES usb

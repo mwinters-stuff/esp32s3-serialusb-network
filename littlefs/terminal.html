@@ -9,9 +9,26 @@
       margin: 0;
       height: 100vh;
       display: flex;
-      flex-direction: column;
       font-family: "Fira Code", monospace;
       transition: background-color 0.4s ease, color 0.4s ease;
+    }
+
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .content-area {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .terminal-panel {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
     }
 
     #term {
@@ -36,6 +53,106 @@
       transition: background-color 0.4s ease, border-color 0.4s ease;
     }
 
+    .log-panel {
+      display: flex;
+      flex-direction: column;
+      width: 350px;
+      border-left: 2px solid;
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+
+    .log-panel.hidden {
+      width: 0;
+      border-left: none;
+    }
+
+    .log-header {
+      padding: 8px;
+      border-bottom: 2px solid;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 30px;
+    }
+
+    .log-filters {
+      padding: 8px;
+      border-bottom: 1px solid;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    .filter-row input {
+      cursor: pointer;
+      width: 14px;
+      height: 14px;
+    }
+
+    .filter-row label {
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .log-list {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .log-entry {
+      padding: 4px 8px;
+      border-bottom: 1px dotted;
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text;
+    }
+
+    .log-info {
+      color: #00ff99;
+    }
+
+    .log-warning {
+      color: #ffaa00;
+    }
+
+    .log-error {
+      color: #ff4d4d;
+    }
+
+    .log-debug {
+      color: #00aaff;
+    }
+
+    .log-verbose {
+      color: #aaaaaa;
+    }
+
+    .vertical-divider {
+      width: 4px;
+      cursor: col-resize;
+      background: linear-gradient(180deg, #444 0%, #888 100%);
+      transition: background 0.2s ease;
+    }
+
+    .vertical-divider:hover {
+      background: linear-gradient(180deg, #666 0%, #aaa 100%);
+    }
+
+    #toggleLogPanel {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
     input {
       flex-grow: 1;
       padding: 8px;
@@ -53,7 +170,13 @@
 
     #themeToggle,
     #sendBtn,
-    #clearHistory {
+    #clearHistory,
+    #toggleLogPanel {
+      padding: 8px 12px;
+      transition: all 0.4s ease, box-shadow 0.4s ease, color 0.4s ease, background-color 0.4s ease, border 0.4s ease;
+    }
+
+    #toggleLogPanelBtn {
       padding: 8px 12px;
       transition: all 0.4s ease, box-shadow 0.4s ease, color 0.4s ease, background-color 0.4s ease, border 0.4s ease;
     }
@@ -95,6 +218,21 @@
       border-color: #444;
     }
 
+    body.modern .log-panel {
+      background-color: #0d0d0d;
+      border-left-color: #444;
+    }
+
+    body.modern .log-header,
+    body.modern .log-filters {
+      background-color: #1c1c1c;
+      border-color: #444;
+    }
+
+    body.modern .log-entry {
+      border-color: #333;
+    }
+
     body.modern input {
       background-color: #1c1c1c;
       border: 1px solid #555;
@@ -107,14 +245,18 @@
     }
 
     body.modern #sendBtn,
-    body.modern #clearHistory {
+    body.modern #clearHistory,
+    body.modern #toggleLogPanel,
+    body.modern #toggleLogPanelBtn {
       background-color: #00ff99;
       color: #000;
       border: none;
     }
 
     body.modern #sendBtn:hover,
-    body.modern #clearHistory:hover {
+    body.modern #clearHistory:hover,
+    body.modern #toggleLogPanel:hover,
+    body.modern #toggleLogPanelBtn:hover {
       background-color: #00cc7a;
     }
 
@@ -148,6 +290,22 @@
       border-color: #00ff00;
     }
 
+    body.retro .log-panel {
+      background-color: #000;
+      border-left-color: #00ff00;
+    }
+
+    body.retro .log-header,
+    body.retro .log-filters {
+      background-color: #000;
+      border-color: #00ff00;
+    }
+
+    body.retro .log-entry {
+      border-color: #003300;
+      text-shadow: 0 0 3px #00ff00;
+    }
+
     body.retro input {
       background-color: #000;
       border: 1px solid #00ff00;
@@ -161,14 +319,18 @@
     }
 
     body.retro #sendBtn,
-    body.retro #clearHistory {
+    body.retro #clearHistory,
+    body.retro #toggleLogPanel,
+    body.retro #toggleLogPanelBtn {
       background-color: #00ff00;
       color: #000;
       border: none;
     }
 
     body.retro #sendBtn:hover,
-    body.retro #clearHistory:hover {
+    body.retro #clearHistory:hover,
+    body.retro #toggleLogPanel:hover,
+    body.retro #toggleLogPanelBtn:hover {
       background-color: #00cc00;
     }
 
@@ -201,7 +363,8 @@
     #history-box {
       box-sizing: border-box;
       padding: 8px 12px;
-      height: 120px; /* Approx 5 lines */
+      height: 120px;
+      /* Approx 5 lines */
       min-height: 120px;
       max-height: 500px;
       overflow-y: auto;
@@ -233,19 +396,64 @@
 </head>
 
 <body>
-  <div id="term"></div>
-  <div id="divider"></div>
-  <div id="history-box"></div>
-  <div class="controls">
-    <button id="themeToggle">Switch to Retro</button>
-    <div id="connectionStatus"></div>
-    <input id="input" autocomplete="off" placeholder="Type a command..."></input>
-    <label>
-      <input type="checkbox" id="autoWrap"> Auto wrap &lt; &gt; </input>
-    </label>
-    <button id="sendBtn">Send</button>
-    <button id="clearHistory">Clear History</button>
+  <div class="main-container">
+    <div class="content-area">
+      <div class="terminal-panel">
+        <div id="term"></div>
+        <div id="divider"></div>
+        <div id="history-box"></div>
+      </div>
+
+      <div class="vertical-divider" id="verticalDivider"></div>
+
+      <div class="log-panel hidden" id="logPanel">
+        <div class="log-header">
+          <span>Logs</span>
+          <button id="toggleLogPanel">Hide</button>
+        </div>
+        <div class="log-filters">
+          <div class="filter-row">
+            <input type="checkbox" id="filterInfo" checked>
+            <label for="filterInfo">Info</label>
+          </div>
+          <div class="filter-row">
+            <input type="checkbox" id="filterWarning" checked>
+            <label for="filterWarning">Warning</label>
+          </div>
+          <div class="filter-row">
+            <input type="checkbox" id="filterError" checked>
+            <label for="filterError">Error</label>
+          </div>
+          <div class="filter-row">
+            <input type="checkbox" id="filterDebug" checked>
+            <label for="filterDebug">Debug</label>
+          </div>
+          <div class="filter-row">
+            <input type="checkbox" id="filterVerbose" checked>
+            <label for="filterVerbose">Verbose</label>
+          </div>
+          <div class="filter-row">
+            <input type="checkbox" id="filterOther" checked>
+            <label for="filterOther">Other</label>
+          </div>
+        </div>
+        <div class="log-list" id="logList"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="themeToggle">Switch to Retro</button>
+      <button id="toggleLogPanelBtn">Show Logs</button>
+      <div id="connectionStatus"></div>
+      <input id="input" autocomplete="off" placeholder="Type a command..."></input>
+      <label>
+        <input type="checkbox" id="autoWrap"> Auto wrap &lt; &gt; </input>
+      </label>
+      <button id="sendBtn">Send</button>
+      <button id="clearHistory">Clear History</button>
+    </div>
   </div>
+
   <script>
     const toggleBtn = document.getElementById('themeToggle');
     const input = document.getElementById('input');
@@ -254,9 +462,22 @@
     const autoWrap = document.getElementById('autoWrap');
     const historyBox = document.getElementById('history-box');
     const connectionStatusEl = document.getElementById('connectionStatus');
+    const logPanel = document.getElementById('logPanel');
+    const logList = document.getElementById('logList');
+    const toggleLogPanelBtn = document.getElementById('toggleLogPanelBtn');
+    const verticalDivider = document.getElementById('verticalDivider');
+
     let history = JSON.parse(localStorage.getItem('history') || '[]');
     let historyIndex = history.length;
     let ws;
+    let logs = [];
+    const maxLogs = 300;  // Reduced further to prevent backlog on reload
+    let lastRenderedCount = 0;
+    let updateLogTimeout = null;
+    let renderScheduled = false;
+    let isPageUnloading = false;
+    let isDragging = false;
+    let isDraggingVertical = false;
 
     // Load saved theme
     const savedTheme = localStorage.getItem('theme') || 'modern';
@@ -264,70 +485,299 @@
     updateToggleText(savedTheme);
 
     toggleBtn.addEventListener('click', () => {
-        document.body.classList.toggle('modern');
-        document.body.classList.toggle('retro');
-        const newTheme = document.body.classList.contains('modern') ? 'modern' : 'retro';
-        updateToggleText(newTheme);
-        localStorage.setItem('theme', newTheme);
+      document.body.classList.toggle('modern');
+      document.body.classList.toggle('retro');
+      const newTheme = document.body.classList.contains('modern') ? 'modern' : 'retro';
+      updateToggleText(newTheme);
+      localStorage.setItem('theme', newTheme);
     });
 
     function updateToggleText(theme) {
-        toggleBtn.textContent = theme === 'modern' ? 'Switch to Retro' : 'Switch to Modern';
+      toggleBtn.textContent = theme === 'modern' ? 'Switch to Retro' : 'Switch to Modern';
     }
+
+    // Parse log level and tag from ESP_LOG format: "I (12345) TAG: message"
+    function parseLogMessage(msg) {
+      const match = msg.match(/^([IWEDVa-zA-Z])\s+\(\s*\d+\)\s+([^:]+):\s*(.*)/);
+      if (match) {
+        const levelChar = match[1];
+        const tag = match[2].trim();
+        const content = match[3];
+
+        let level = 'other';
+        if (levelChar === 'I') level = 'info';
+        else if (levelChar === 'W') level = 'warning';
+        else if (levelChar === 'E') level = 'error';
+        else if (levelChar === 'D') level = 'debug';
+        else if (levelChar === 'V') level = 'verbose';
+
+        return { level, tag, content, fullMsg: msg };
+      }
+      return { level: 'other', tag: '', content: msg, fullMsg: msg };
+    }
+
+    function addLog(msg) {
+      // Split by newlines in case multiple logs arrived at once
+      const lines = msg.split('\n').filter(line => line.trim().length > 0);
+
+      lines.forEach(line => {
+        const parsed = parseLogMessage(line);
+        logs.push(parsed);
+      });
+
+      if (logs.length > maxLogs) {
+        logs.splice(0, logs.length - maxLogs);
+      }
+
+      // Debounce the DOM update - only update every 300ms to allow WebSocket processing
+      if (updateLogTimeout) {
+        clearTimeout(updateLogTimeout);
+      }
+      updateLogTimeout = setTimeout(() => {
+        updateLogDisplayAsync();
+        updateLogTimeout = null;
+      }, 300);
+    }
+
+    function updateLogDisplayAsync() {
+      if (renderScheduled) return;
+      renderScheduled = true;
+
+      requestAnimationFrame(() => {
+        updateLogDisplay();
+        renderScheduled = false;
+      });
+    }
+
+    function updateLogDisplay() {
+      const filters = {
+        info: document.getElementById('filterInfo').checked,
+        warning: document.getElementById('filterWarning').checked,
+        error: document.getElementById('filterError').checked,
+        debug: document.getElementById('filterDebug').checked,
+        verbose: document.getElementById('filterVerbose').checked,
+        other: document.getElementById('filterOther').checked,
+      };
+
+      // Count how many logs pass the filters
+      let visibleCount = 0;
+      const maxVisible = 200;  // Only render up to 200 visible logs
+
+      logs.forEach(log => {
+        if (filters[log.level]) {
+          visibleCount++;
+        }
+      });
+
+      // If no change in filter or count, don't rebuild DOM
+      if (logs.length === lastRenderedCount) {
+        return;
+      }
+
+      // Use DocumentFragment for efficient DOM updates
+      const fragment = document.createDocumentFragment();
+      let rendered = 0;
+
+      // Iterate from the END of the array backwards to get most recent logs first
+      for (let i = logs.length - 1; i >= 0 && rendered < maxVisible; i--) {
+        const log = logs[i];
+        if (filters[log.level]) {
+          const div = document.createElement('div');
+          div.className = `log-entry log-${log.level}`;
+          div.textContent = log.fullMsg;
+          fragment.insertBefore(div, fragment.firstChild);
+          rendered++;
+        }
+      }
+
+      // Single DOM update
+      logList.innerHTML = '';
+      logList.appendChild(fragment);
+
+      lastRenderedCount = visibleCount;
+      logList.scrollTop = logList.scrollHeight;
+
+      lastRenderedCount = logs.length;
+    }
+
+    // Load log panel visibility preference
+    if (localStorage.getItem('logPanelVisible') === 'true') {
+      logPanel.classList.remove('hidden');
+      toggleLogPanelBtn.textContent = 'Hide Logs';
+    } else {
+      logPanel.classList.add('hidden');
+      toggleLogPanelBtn.textContent = 'Show Logs';
+    }
+
+    // Load log panel width preference
+    const savedLogPanelWidth = localStorage.getItem('logPanelWidth');
+    if (savedLogPanelWidth) {
+      logPanel.style.width = savedLogPanelWidth + 'px';
+    }
+
+    // Load filter preferences BEFORE setting up listeners
+    const filterPrefs = JSON.parse(localStorage.getItem('logFilters') || '{}');
+    ['filterInfo', 'filterWarning', 'filterError', 'filterDebug', 'filterVerbose', 'filterOther'].forEach(id => {
+      const checkbox = document.getElementById(id);
+      if (id in filterPrefs) {
+        checkbox.checked = filterPrefs[id];
+      }
+    });
+
+    // Add event listeners to filter checkboxes AFTER loading preferences
+    ['filterInfo', 'filterWarning', 'filterError', 'filterDebug', 'filterVerbose', 'filterOther'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        updateLogDisplayAsync();
+        // Save filter preferences
+        const filterStates = {};
+        ['filterInfo', 'filterWarning', 'filterError', 'filterDebug', 'filterVerbose', 'filterOther'].forEach(filterId => {
+          filterStates[filterId] = document.getElementById(filterId).checked;
+        });
+        localStorage.setItem('logFilters', JSON.stringify(filterStates));
+      });
+    });
+
+    // Toggle log panel visibility
+    toggleLogPanelBtn.addEventListener('click', () => {
+      logPanel.classList.toggle('hidden');
+      const isHidden = logPanel.classList.contains('hidden');
+      toggleLogPanelBtn.textContent = isHidden ? 'Show Logs' : 'Hide Logs';
+      localStorage.setItem('logPanelVisible', !isHidden);
+    });
+
+    // Toggle from inside log panel
+    document.getElementById('toggleLogPanel').addEventListener('click', () => {
+      toggleLogPanelBtn.click();
+    });
+
+    // Vertical divider drag logic
+    let startX = 0;
+    let startLogPanelWidth = 0;
+
+    verticalDivider.addEventListener('mousedown', function (e) {
+      isDraggingVertical = true;
+      startX = e.clientX;
+      startLogPanelWidth = logPanel.offsetWidth;
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!isDraggingVertical || isPageUnloading) return;
+      let delta = startX - e.clientX;
+      let newWidth = startLogPanelWidth + delta;
+      newWidth = Math.max(200, Math.min(600, newWidth));
+      logPanel.style.width = newWidth + 'px';
+      // Save the width preference (debounced via next tick)
+      requestAnimationFrame(() => {
+        localStorage.setItem('logPanelWidth', newWidth);
+      });
+    });
+
+    document.addEventListener('mouseup', function (e) {
+      if (isDraggingVertical) {
+        isDraggingVertical = false;
+        document.body.style.userSelect = '';
+      }
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.userSelect = '';
+      }
+    });
 
     function connect() {
-        const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+      // Close any existing connection first to prevent conflicts
+      if (ws) {
+        try {
+          ws.onclose = null;
+          ws.onerror = null;
+          ws.onmessage = null;
+          ws.onopen = null;
+          ws.close();
+        } catch (e) {
+          console.warn('Error closing old WebSocket:', e);
+        }
+        ws = null;
+      }
 
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            connectionStatusEl.textContent = '...';
-            connectionStatusEl.className = '';
-            // Server will send USB status upon connection.
-        };
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      // ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+      ws = new WebSocket(`${proto}://192.168.1.67/ws`);
 
-        ws.onmessage = (event) => {
-            const data = event.data;
-            try {
-                const json = JSON.parse(data);
-                if (json.type === 'status') {
-                    updateStatus(json.connected);
-                    return;
-                }
-            } catch (e) {
-                // Not a JSON status message, treat as terminal data
-            }
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        connectionStatusEl.textContent = '...';
+        connectionStatusEl.className = '';
+      };
 
-            const term = document.getElementById('term');
-            term.textContent += data.replace(/\r\n|\r|\n/g, '\n');
-            term.scrollTop = term.scrollHeight;
-        };
+      ws.onmessage = (event) => {
+        const data = event.data;
+        try {
+          const json = JSON.parse(data);
+          if (json.type === 'status') {
+            updateStatus(json.connected);
+            return;
+          }
+        } catch (e) {
+          // Not a JSON status message, treat as terminal data
+        }
 
-        ws.onclose = () => {
-            console.log('WebSocket disconnected. Reconnecting in 1s...');
-            connectionStatusEl.textContent = 'SERVER DISCONNECTED';
-            connectionStatusEl.className = 'disconnected';
-            setTimeout(connect, 1000);
-        };
+        // Check if this is an ESP_LOG message format: "I (12345) TAG: message"
+        const isEspLog = /^[IWEDVa-zA-Z]\s+\(\s*\d+\)\s+[^:]+:/.test(data.trim());
 
-        ws.onerror = (error) => {
-            console.error('WebSocket Error:', error);
-            ws.close(); // This will trigger onclose and reconnection logic
-        };
+        if (isEspLog) {
+          // ESP_LOG messages go only to the log panel
+          addLog(data.trim());
+        } else {
+          // Non-log data goes to the main terminal
+          const term = document.getElementById('term');
+          term.textContent += data.replace(/\r\n|\r|\n/g, '\n');
+          term.scrollTop = term.scrollHeight;
+        }
+      };
+
+      ws.onclose = () => {
+        if (!isPageUnloading) {
+          console.log('WebSocket disconnected. Reconnecting in 1s...');
+          connectionStatusEl.textContent = 'SERVER DISCONNECTED';
+          connectionStatusEl.className = 'disconnected';
+          setTimeout(connect, 1000);
+        } else {
+          console.log('WebSocket closed due to page unload.');
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+        if (ws) {
+          ws.close();
+        }
+      };
     }
+
+    // Properly close WebSocket on page unload/reload
+    window.addEventListener('beforeunload', () => {
+      console.log('Page unloading - preventing reconnection attempts');
+      isPageUnloading = true;
+      if (ws) {
+        ws.close(); // Tell the ESP32 right now that we are leaving
+      }
+    });
 
     function updateStatus(connected) {
-        if (connected) {
-            connectionStatusEl.textContent = 'USB CONNECTED';
-            connectionStatusEl.className = 'connected';
-          } else {
-            connectionStatusEl.textContent = 'USB DISCONNECTED';
-            connectionStatusEl.className = 'disconnected';
-          }
+      if (connected) {
+        connectionStatusEl.textContent = 'USB CONNECTED';
+        connectionStatusEl.className = 'connected';
+      } else {
+        connectionStatusEl.textContent = 'USB DISCONNECTED';
+        connectionStatusEl.className = 'disconnected';
+      }
     }
 
-    // Initial connection
-    connect();
+    // Initial connection - wait a bit for server cleanup
+    setTimeout(() => {
+      console.log('Initializing WebSocket connection');
+      connect();
+    }, 1000);
 
     // Show history immediately on page load
     updateHistoryDisplay();
@@ -414,19 +864,18 @@
     const term = document.getElementById('term');
     const divider = document.getElementById('divider');
 
-    let isDragging = false;
     let startY = 0;
     let startTermHeight = 0;
 
-    divider.addEventListener('mousedown', function(e) {
+    divider.addEventListener('mousedown', function (e) {
       isDragging = true;
       startY = e.clientY;
       startTermHeight = term.offsetHeight;
       document.body.style.userSelect = 'none';
     });
 
-    document.addEventListener('mousemove', function(e) {
-      if (!isDragging) return;
+    document.addEventListener('mousemove', function (e) {
+      if (!isDragging || isPageUnloading) return;
       let delta = e.clientY - startY;
       let newTermHeight = startTermHeight + delta;
       // Clamp heights
@@ -438,13 +887,6 @@
       let newHistoryHeight = window.innerHeight - newTermHeight - controlsHeight - dividerHeight;
       newHistoryHeight = Math.max(60, newHistoryHeight);
       historyBox.style.height = newHistoryHeight + 'px';
-    });
-
-    document.addEventListener('mouseup', function(e) {
-      if (isDragging) {
-        isDragging = false;
-        document.body.style.userSelect = '';
-      }
     });
     // --- End Divider Drag Logic ---
   </script>

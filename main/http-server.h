@@ -1,9 +1,9 @@
 #ifndef _HTTP_SERVER_H
 #define _HTTP_SERVER_H
 
-#include <vector>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <vector>
 
 #include <esp_http_server.h>
 #include <esp_https_ota.h>
@@ -12,11 +12,10 @@
 #include <esp_partition.h>
 #include <usb/cdc_acm_host.h>
 
-#include "usb-handler.h"
 #include "led_indicator.h"
+#include "usb-handler.h"
 
-class HttpServer
-{
+class HttpServer {
 private:
   std::shared_ptr<UsbHandler> usbHandler;
   httpd_handle_t server = NULL;
@@ -41,12 +40,17 @@ private:
   bool is_authenticated(httpd_req_t *req);
 
   void handle_client_close(int sockfd);
+
 public:
-  HttpServer(std::shared_ptr<UsbHandler> usbHandler, std::shared_ptr<LedIndicator> led);
+  HttpServer(std::shared_ptr<UsbHandler> usbHandler,
+             std::shared_ptr<LedIndicator> led);
   virtual ~HttpServer();
 
   httpd_handle_t start();
   void ping_task();
+
+  // Send log message to all connected web clients
+  void log_to_web(const uint8_t *data, size_t len);
 };
 
 #endif

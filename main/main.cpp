@@ -3,6 +3,7 @@
 #include "littlefs.h"
 #include "usb-handler.h"
 #include "w5500.h"
+#include "web-logger.h"
 #include "wifi.h"
 #include <esp-mdns.h>
 #include <esp_event.h>
@@ -37,5 +38,9 @@ extern "C" void app_main(void) {
   auto usbHandler = std::make_shared<UsbHandler>(ledIndicator);
   auto httpServer = std::make_shared<HttpServer>(usbHandler, ledIndicator);
   httpServer->start();
+
+  // Initialize web logging after HTTP server is created
+  WebLogger::init(httpServer);
+
   usbHandler->usb_loop();
 }
