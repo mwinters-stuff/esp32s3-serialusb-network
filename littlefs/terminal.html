@@ -257,6 +257,7 @@
     let history = JSON.parse(localStorage.getItem('history') || '[]');
     let historyIndex = history.length;
     let ws;
+    const serialDecoder = new TextDecoder();
 
     // Load saved theme
     const savedTheme = localStorage.getItem('theme') || 'modern';
@@ -278,6 +279,7 @@
     function connect() {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
         ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+      ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {
             console.log('WebSocket connected');
@@ -288,19 +290,38 @@
 
         ws.onmessage = (event) => {
             const data = event.data;
+
+      if (typeof data === 'string') {
+        try {
+          const json = JSON.parse(data);
+          if (json.type === 'status') {
+            updateStatus(json.connected);
+            return;
+          }
+        } catch (e) {
+          // Not a JSON status message, treat as terminal data.
+        }
+
+        appendTerminalText(data);
+        return;
+      }
+
+      if (data instanceof ArrayBuffer) {
+        appendTerminalText(serialDecoder.decode(new Uint8Array(data), { stream: true }));
+        return;
+      }
+
             try {
-                const json = JSON.parse(data);
+        const json = JSON.parse(String(data));
                 if (json.type === 'status') {
                     updateStatus(json.connected);
                     return;
                 }
             } catch (e) {
-                // Not a JSON status message, treat as terminal data
+        // Not a JSON status message, treat as terminal data.
             }
 
-            const term = document.getElementById('term');
-            term.textContent += data.replace(/\r\n|\r|\n/g, '\n');
-            term.scrollTop = term.scrollHeight;
+      appendTerminalText(String(data));
         };
 
         ws.onclose = () => {
@@ -324,6 +345,13 @@
             connectionStatusEl.textContent = 'USB DISCONNECTED';
             connectionStatusEl.className = 'disconnected';
           }
+    }
+
+    function appendTerminalText(text) {
+      if (!text) return;
+      const term = document.getElementById('term');
+      term.textContent += text.replace(/\r\n|\r|\n/g, '\n');
+      term.scrollTop = term.scrollHeight;
     }
 
     // Initial connection

@@ -1,8 +1,8 @@
 #include <string.h>
 
 #include "config.h"
-#include "esp_log.h"
-#include "mdns.h"
+#include <esp_log.h>
+#include <mdns.h>
 
 #define TAG "MDNS"
 

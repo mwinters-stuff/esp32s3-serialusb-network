@@ -1,6 +1,6 @@
 #include "led_indicator.h"
-#include "freertos/task.h"
-#include "esp_log.h"
+#include <freertos/task.h>
+#include <esp_log.h>
 #include <cmath>
 
 static const char *TAG = "LED";
@@ -12,13 +12,11 @@ LedIndicator::LedIndicator() : currentState(LedState::IDLE), strip_handle(NULL) 
 void LedIndicator::init() {
     ESP_LOGI(TAG, "Initializing addressable LED on GPIO %d", LED_PIN);
 
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = LED_PIN,
-        .max_leds = 1, // The number of LEDs in the strip
-    };
-    led_strip_rmt_config_t rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
-    };
+    led_strip_config_t strip_config = {};
+    strip_config.strip_gpio_num = LED_PIN;
+    strip_config.max_leds = 1; // The number of LEDs in the strip
+    led_strip_rmt_config_t rmt_config = {};
+    rmt_config.resolution_hz = 10 * 1000 * 1000; // 10MHz
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &strip_handle));
 
     if (!strip_handle) {

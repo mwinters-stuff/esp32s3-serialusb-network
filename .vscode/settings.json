@@ -11,5 +11,5 @@
     "IDF_TARGET": "esp32s3"
   },
   "idf.flashType": "UART",
-  "idf.currentSetup": "/home/mathew/.espressif/v6.0.2/esp-idf"
+  "idf.currentSetup": "/home/mathew/.espressif/v5.5.4/esp-idf"
 }

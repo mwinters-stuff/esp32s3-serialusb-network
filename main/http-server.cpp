@@ -1,21 +1,21 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <algorithm>
 #include <memory>
 #include <vector>
 
-#include "esp_http_server.h"
+#include <esp_http_server.h>
 
 #ifndef CONFIG_HTTPD_WS_SUPPORT
 #error "WebSocket support is not enabled. Please run 'idf.py menuconfig', go to Component config -> HTTP Server, and enable [ ] Enable Websocket support."
 #endif
 
-#include "esp_https_ota.h"
-#include "esp_littlefs.h"
-#include "esp_log.h"
-#include "esp_ota_ops.h"
-#include "esp_partition.h"
-#include "usb/cdc_acm_host.h"
+#include <esp_https_ota.h>
+#include <esp_littlefs.h>
+#include <esp_log.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+#include <usb/cdc_acm_host.h>
 
 #include "config.h"
 #include "http-server.h"
@@ -224,6 +224,11 @@ esp_err_t HttpServer::terminal_page_handler(httpd_req_t *req)
 
 void HttpServer::broadcast(const uint8_t *data, size_t len)
 {
+  if (len == 0)
+  {
+    return;
+  }
+
   if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) != pdTRUE)
   {
     ESP_LOGW(TAG, "Broadcasting no semiphore");
@@ -238,11 +243,9 @@ void HttpServer::broadcast(const uint8_t *data, size_t len)
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *)data;
     ws_pkt.len = len;
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT; // Or BINARY if you prefer
+    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
 
     // Asynchronous send.
-    ESP_LOGI(TAG, "Broadcasting to %d ", fd);
-
     esp_err_t ret = httpd_ws_send_frame_async(this->server, fd, &ws_pkt);
     if (ret != ESP_OK)
     {
@@ -301,23 +304,20 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
   // Send initial connection status to the new client
   if (usbHandler)
   {
-    if(isUSBConnected != usbHandler->isConnected())
-    {
-      isUSBConnected = usbHandler->isConnected();
-      ESP_LOGI(TAG, "New client connected, USB status: %s", isUSBConnected ? "connected" : "disconnected");
-      char resp[64];
-      snprintf(resp, sizeof(resp), "{\"type\":\"status\", \"connected\": %s}", isUSBConnected ? "true" : "false");
+    isUSBConnected = usbHandler->isConnected();
+    ESP_LOGI(TAG, "New client connected, USB status: %s", isUSBConnected ? "connected" : "disconnected");
+    char resp[64];
+    snprintf(resp, sizeof(resp), "{\"type\":\"status\", \"connected\": %s}", isUSBConnected ? "true" : "false");
 
-      httpd_ws_frame_t ws_pkt;
-      memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-      ws_pkt.payload = (uint8_t *)resp;
-      ws_pkt.len = strlen(resp);
-      ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = (uint8_t *)resp;
+    ws_pkt.len = strlen(resp);
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
-      // Asynchronous send to the new client.
-      int fd = httpd_req_to_sockfd(req);
-      httpd_ws_send_frame_async(this->server, fd, &ws_pkt);
-    }
+    // Asynchronous send to the new client.
+    int fd = httpd_req_to_sockfd(req);
+    httpd_ws_send_frame_async(this->server, fd, &ws_pkt);
   }
 
   esp_err_t ret = ESP_OK;
