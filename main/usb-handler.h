@@ -42,6 +42,11 @@ private:
   std::unique_ptr<CdcAcmDevice> vcp;
   std::shared_ptr<LedIndicator> ledIndicator;
 
+  bool s_usb_host_installed = false;
+  bool s_usb_lib_task_started = false;
+  bool s_cdc_acm_installed = false;
+
+
   bool handle_rx(const uint8_t *data, size_t data_len, void *arg);
   void handle_event(const cdc_acm_host_dev_event_data_t *event, void *user_ctx);
   void usb_lib_task(void *arg);

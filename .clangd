@@ -1,0 +1,27 @@
+CompileFlags:
+    CompilationDatabase: build
+    BuiltinHeaders: QueryDriver
+    Remove:
+        - -mlongcalls
+        - -fstrict-volatile-bitfields
+        - -fno-tree-switch-conversion
+    Add:
+        - --target=xtensa-esp-elf
+        - --sysroot=/home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf
+        - -nobuiltininc
+        - -isystem
+        - /home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/xtensa-esp-elf/include/c++/14.2.0
+        - -isystem
+        - /home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/xtensa-esp-elf/include/c++/14.2.0/xtensa-esp-elf/esp32s3
+        - -isystem
+        - /home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/xtensa-esp-elf/include/c++/14.2.0/backward
+        - -isystem
+        - /home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/lib/gcc/xtensa-esp-elf/14.2.0/include
+        - -isystem
+        - /home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/lib/gcc/xtensa-esp-elf/14.2.0/include-fixed
+        - -isystem
+        - /home/mathew/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/xtensa-esp-elf/include
+
+Diagnostics:
+    Suppress:
+        - pp_expr_bad_token_lparen

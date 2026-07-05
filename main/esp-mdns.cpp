@@ -25,3 +25,9 @@ void initialise_mdns(void)
     ESP_ERROR_CHECK(mdns_service_add("ESP32-WebServer", "_http", "_tcp", 80, serviceTxtData, 3));
     ESP_ERROR_CHECK(mdns_service_subtype_add_for_host("ESP32-WebServer", "_http", "_tcp", NULL, "_server"));
 }
+
+void mdns_announce()
+{
+    mdns_service_txt_item_set("_http", "_tcp", "board", "esp32");
+    ESP_LOGI(TAG, "mDNS re-announced");
+}

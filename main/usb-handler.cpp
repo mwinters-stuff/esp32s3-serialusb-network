@@ -27,30 +27,8 @@ using namespace esp_usb;
 
 namespace
 {
-bool s_usb_host_installed = false;
-bool s_usb_lib_task_started = false;
-bool s_cdc_acm_installed = false;
-constexpr size_t RX_LINE_MAX_LEN = 512;
-constexpr TickType_t RX_FLUSH_TIMEOUT_TICKS = pdMS_TO_TICKS(50);
-std::string sanitize_for_log(const std::string &line)
-{
-  std::string sanitized;
-  sanitized.reserve(line.size());
-
-  for (unsigned char ch : line)
-  {
-    if (std::isprint(ch) || ch == '\t')
-    {
-      sanitized.push_back(static_cast<char>(ch));
-    }
-    else
-    {
-      sanitized.push_back('.');
-    }
-  }
-
-  return sanitized;
-}
+  constexpr size_t RX_LINE_MAX_LEN = 512;
+  constexpr TickType_t RX_FLUSH_TIMEOUT_TICKS = pdMS_TO_TICKS(50);
 }
 
 // Buffer for received data
@@ -201,14 +179,12 @@ void UsbHandler::rx_dispatch_task()
 
 void UsbHandler::flush_rx_line(bool with_newline)
 {
-  ESP_LOGI(TAG, "Flushing RX line buffer (with_newline=%d)", with_newline);
   if (rx_line_buffer.empty() && !with_newline)
   {
     return;
   }
 
   std::string outbound = rx_line_buffer;
-  ESP_LOGI(TAG, "Flushing RX line %s (with_newline=%d)", outbound.c_str(), with_newline);
   
   if (with_newline)
   {
@@ -220,7 +196,6 @@ void UsbHandler::flush_rx_line(bool with_newline)
     rx_callback(reinterpret_cast<const uint8_t *>(outbound.data()), outbound.size());
   }
 
-  ESP_LOGI(TAG, "RX line: %s", sanitize_for_log(rx_line_buffer).c_str());
   rx_line_buffer.clear();
 }
 
@@ -482,7 +457,6 @@ esp_err_t UsbHandler::tx_blocking(uint8_t *data, size_t len)
 {
   if (vcp)
   {
-      ESP_LOGI(TAG, "Transmitting %d bytes of data", (int)len);
     return vcp->tx_blocking(data, len);
   }
   return ESP_FAIL;
@@ -490,12 +464,10 @@ esp_err_t UsbHandler::tx_blocking(uint8_t *data, size_t len)
 
 void UsbHandler::set_rx_callback(std::function<void(const uint8_t* data, size_t len)> cb)
 {
-  ESP_LOGI(TAG, "Setting RX callback");
   rx_callback = cb;
 }
 
 void UsbHandler::set_connection_callback(std::function<void(bool connected)> cb)
 {
-  ESP_LOGI(TAG, "Setting connection callback");
   connection_callback = cb;
 }

@@ -297,7 +297,7 @@ void HttpServer::broadcast(const uint8_t *data, size_t len)
   payload += json_escape(data, len);
   payload += "\"}";
 
-  ESP_LOGI(TAG, "Sending terminal line: %s", payload.c_str());
+  ESP_LOGD(TAG, "Sending terminal line: %s", payload.c_str());
 
   if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) == pdTRUE)
   {
@@ -701,7 +701,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, terminal_page_handler),
         .user_ctx = this,
         .is_websocket = false,
-        .handle_ws_control_frames = NULL,
+        .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &term_uri);
 
@@ -723,7 +723,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, firmware_upload_handler),
         .user_ctx = this,
         .is_websocket = false,
-        .handle_ws_control_frames = NULL,
+        .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &fw_upload_post_uri);
 
@@ -734,7 +734,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, fs_upload_handler),
         .user_ctx = this,
         .is_websocket = false,
-        .handle_ws_control_frames = NULL,
+        .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &fw_uploadfs_post_uri);
 
@@ -745,7 +745,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, upload_page_handler),
         .user_ctx = this,
         .is_websocket = false,
-        .handle_ws_control_frames = NULL,
+        .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &upload_uri);
 
@@ -756,7 +756,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, login_page_handler),
         .user_ctx = this,
         .is_websocket = false,
-        .handle_ws_control_frames = NULL,
+        .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &login_uri);
 
@@ -767,7 +767,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, login_post_handler),
         .user_ctx = this,
         .is_websocket = false,
-        .handle_ws_control_frames = NULL,
+        .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &login_post_uri);
 
