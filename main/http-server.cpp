@@ -1,7 +1,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <esp_http_server.h>
@@ -21,6 +24,67 @@
 #include "http-server.h"
 
 static const char *TAG = "HTTP";
+
+namespace
+{
+constexpr size_t MAX_RECENT_LINE_MESSAGES = 64;
+
+struct WsSendAsyncContext
+{
+  int fd;
+  std::string *message;
+};
+
+std::string json_escape(const uint8_t *data, size_t len)
+{
+  std::string escaped;
+  escaped.reserve(len + 16);
+
+  for (size_t i = 0; i < len; ++i)
+  {
+    const unsigned char ch = data[i];
+    switch (ch)
+    {
+    case '\\':
+      escaped += "\\\\";
+      break;
+    case '"':
+      escaped += "\\\"";
+      break;
+    case '\b':
+      escaped += "\\b";
+      break;
+    case '\f':
+      escaped += "\\f";
+      break;
+    case '\n':
+      escaped += "\\n";
+      break;
+    case '\r':
+      escaped += "\\r";
+      break;
+    case '\t':
+      escaped += "\\t";
+      break;
+    default:
+      if (ch < 0x20 || ch >= 0x80)
+      {
+        char buf[7];
+        snprintf(buf, sizeof(buf), "\\u%04X", ch);
+        escaped += buf;
+      }
+      else
+      {
+        escaped.push_back(static_cast<char>(ch));
+      }
+      break;
+    }
+  }
+
+  return escaped;
+}
+
+}
 
 HttpServer::HttpServer(std::shared_ptr<UsbHandler> usbHandler, std::shared_ptr<LedIndicator> led) : usbHandler(usbHandler), ledIndicator(led)
 {
@@ -229,6 +293,32 @@ void HttpServer::broadcast(const uint8_t *data, size_t len)
     return;
   }
 
+  std::string payload = "{\"type\":\"line\",\"data\":\"";
+  payload += json_escape(data, len);
+  payload += "\"}";
+
+  ESP_LOGI(TAG, "Sending terminal line: %s", payload.c_str());
+
+  if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) == pdTRUE)
+  {
+    recent_line_messages.push_back(payload);
+    while (recent_line_messages.size() > MAX_RECENT_LINE_MESSAGES)
+    {
+      recent_line_messages.pop_front();
+    }
+    xSemaphoreGive(ws_clients_mutex);
+  }
+
+  broadcast_text_message(payload);
+}
+
+void HttpServer::broadcast_text_message(const std::string &message)
+{
+  if (message.empty())
+  {
+    return;
+  }
+
   if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) != pdTRUE)
   {
     ESP_LOGW(TAG, "Broadcasting no semiphore");
@@ -239,28 +329,22 @@ void HttpServer::broadcast(const uint8_t *data, size_t len)
   for (auto it = ws_clients.begin(); it != ws_clients.end();)
   {
     int fd = *it;
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *)data;
-    ws_pkt.len = len;
-    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+    httpd_ws_frame_t ws_pkt = {};
+    ws_pkt.payload = reinterpret_cast<uint8_t *>(const_cast<char *>(message.data()));
+    ws_pkt.len = message.size();
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
-    // Asynchronous send.
-    esp_err_t ret = httpd_ws_send_frame_async(this->server, fd, &ws_pkt);
+    esp_err_t ret = httpd_ws_send_data(this->server, fd, &ws_pkt);
     if (ret != ESP_OK)
     {
-      // ESP_ERR_NO_MEM (257) means the async send queue is full. This is a transient error.
-      // We should not disconnect the client. For this application, dropping the packet is
-      // acceptable to avoid blocking the USB handler.
       if (ret == ESP_ERR_NO_MEM)
       {
-        ESP_LOGW(TAG, "WS async send queue full for fd %d. Dropping packet.", fd);
+        ESP_LOGW(TAG, "WS send queue full for fd %d. Dropping packet.", fd);
         ++it; // Move to the next client
       }
       else
       {
-        // Any other error indicates a client that is no longer valid.
-        ESP_LOGW(TAG, "httpd_ws_send_frame_async failed with %d on fd %d, removing client", ret, fd);
+        ESP_LOGW(TAG, "httpd_ws_send_data failed with %d on fd %d, removing client", ret, fd);
         it = ws_clients.erase(it);
       }
     }
@@ -281,6 +365,7 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
   {
     int fd = httpd_req_to_sockfd(req);
     ESP_LOGI(TAG, "Handshake done, new WS client connected on fd %d", fd);
+    std::deque<std::string> replay_messages;
     if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) == pdTRUE)
     {
       // Add the client only on the initial GET request.
@@ -294,79 +379,50 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
         }
         ws_clients.push_back(fd);
       }
+      replay_messages = recent_line_messages;
       xSemaphoreGive(ws_clients_mutex);
+
+      if (usbHandler)
+      {
+        isUSBConnected = usbHandler->isConnected();
+        ESP_LOGI(TAG, "New client connected, USB status: %s", isUSBConnected ? "connected" : "disconnected");
+        std::string resp = isUSBConnected ? "{\"type\":\"status\",\"connected\":true}" : "{\"type\":\"status\",\"connected\":false}";
+
+        httpd_ws_frame_t status_pkt = {};
+        status_pkt.payload = (uint8_t *)resp.data();
+        status_pkt.len = resp.size();
+        status_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+        esp_err_t status_ret = httpd_ws_send_frame(req, &status_pkt);
+        if (status_ret != ESP_OK)
+        {
+          ESP_LOGW(TAG, "Initial status send failed on fd %d with %d", fd, status_ret);
+        }
+      }
+
+      for (const auto &replay_message : replay_messages)
+      {
+        httpd_ws_frame_t replay_pkt = {};
+        replay_pkt.payload = (uint8_t *)replay_message.data();
+        replay_pkt.len = replay_message.size();
+        replay_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+        esp_err_t replay_ret = httpd_ws_send_frame(req, &replay_pkt);
+        if (replay_ret != ESP_OK)
+        {
+          ESP_LOGW(TAG, "Replay line send failed on fd %d with %d", fd, replay_ret);
+          break;
+        }
+      }
 
       return ESP_OK;
     }
     // Do not return here. The handler must continue to process frames.
   }
 
-  // Send initial connection status to the new client
-  if (usbHandler)
-  {
-    isUSBConnected = usbHandler->isConnected();
-    ESP_LOGI(TAG, "New client connected, USB status: %s", isUSBConnected ? "connected" : "disconnected");
-    char resp[64];
-    snprintf(resp, sizeof(resp), "{\"type\":\"status\", \"connected\": %s}", isUSBConnected ? "true" : "false");
-
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *)resp;
-    ws_pkt.len = strlen(resp);
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-    // Asynchronous send to the new client.
-    int fd = httpd_req_to_sockfd(req);
-    httpd_ws_send_frame_async(this->server, fd, &ws_pkt);
-  }
-
-  esp_err_t ret = ESP_OK;
-
-  httpd_ws_frame_t ws_pkt;
-  uint8_t *buf = NULL;
-  memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-  ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-  // This call blocks until a frame is received, a timeout occurs, or the connection is closed.
-  ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-  if (ret != ESP_OK)
-  {
-    // A failure here usually means the client has disconnected.
-    ESP_LOGI(TAG, "httpd_ws_recv_frame failed to get frame info with %d. Client disconnected.", ret);
-    return ret; // Exit the loop to close the connection.
-  }
-
-  if (ws_pkt.len > 0)
-  {
-    buf = (uint8_t *)calloc(1, ws_pkt.len + 1);
-    if (buf == NULL)
-    {
-      ESP_LOGE(TAG, "Failed to calloc memory for websocket buffer");
-      ret = ESP_ERR_NO_MEM;
-      return ret; // Exit loop on memory error.
-    }
-    ws_pkt.payload = buf;
-
-    // Get the full frame payload
-    ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-    if (ret != ESP_OK)
-    {
-      ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
-      free(buf);
-      return ret; // Exit loop on receive error.
-    }
-
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT)
-    {
-      if (usbHandler)
-      {
-        usbHandler->tx_blocking(buf, ws_pkt.len);
-      }
-    }
-    free(buf);
-  }
-
-  return ret;
+  // Output-only mode for stability: ignore inbound websocket frames for now.
+  // The previous recv path was destabilizing the socket with malformed-frame handling.
+  return ESP_OK;
 }
 
 static void littlefs_unmount_if_mounted(void)
@@ -622,7 +678,7 @@ httpd_handle_t HttpServer::start()
         .handler = HTTP_HANDLER(HttpServer, websocket_handler),
         .user_ctx = this,
         .is_websocket = true,
-        .handle_ws_control_frames = true, // Enable automatic handling of PONG
+      .handle_ws_control_frames = false,
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &ws_uri);
 
@@ -681,13 +737,9 @@ httpd_handle_t HttpServer::start()
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &login_post_uri);
 
-    // Start a task to periodically send PING frames to all clients
-    xTaskCreate(
-        [](void *param)
-        {
-          static_cast<HttpServer *>(param)->ping_task();
-        },
-        "ws_ping_task", 4096, this, 5, NULL);
+    // Disabled custom ping task for now.
+    // Browser PONG/control-frame handling on this ESP-IDF websocket path was destabilizing
+    // long-lived output streaming, so keep the connection passive while we validate RX flow.
   }
 
   // Set up callbacks for USB events
@@ -698,9 +750,7 @@ httpd_handle_t HttpServer::start()
         { this->broadcast(data, len); });
     usbHandler->set_connection_callback([this](bool connected)
                                         {
-      char resp[64];
-      snprintf(resp, sizeof(resp), "{\"type\":\"status\", \"connected\": %s}", connected ? "true" : "false");
-      this->broadcast((uint8_t*)resp, strlen(resp)); });
+      this->broadcast_text_message(connected ? "{\"type\":\"status\",\"connected\":true}" : "{\"type\":\"status\",\"connected\":false}"); });
   }
   return this->server;
 }

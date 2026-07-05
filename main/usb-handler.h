@@ -38,6 +38,7 @@ private:
   QueueHandle_t rx_queue;
   TaskHandle_t rx_task_handle;
   std::string rx_line_buffer;
+  bool using_vendor_ch34x_driver;
   std::unique_ptr<CdcAcmDevice> vcp;
   std::shared_ptr<LedIndicator> ledIndicator;
 

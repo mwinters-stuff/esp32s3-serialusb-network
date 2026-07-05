@@ -257,7 +257,6 @@
     let history = JSON.parse(localStorage.getItem('history') || '[]');
     let historyIndex = history.length;
     let ws;
-    const serialDecoder = new TextDecoder();
 
     // Load saved theme
     const savedTheme = localStorage.getItem('theme') || 'modern';
@@ -279,7 +278,6 @@
     function connect() {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
         ws = new WebSocket(`${proto}://${window.location.host}/ws`);
-      ws.binaryType = 'arraybuffer';
 
         ws.onopen = () => {
             console.log('WebSocket connected');
@@ -289,39 +287,22 @@
         };
 
         ws.onmessage = (event) => {
-            const data = event.data;
-
-      if (typeof data === 'string') {
-        try {
-          const json = JSON.parse(data);
-          if (json.type === 'status') {
-            updateStatus(json.connected);
-            return;
-          }
-        } catch (e) {
-          // Not a JSON status message, treat as terminal data.
-        }
-
-        appendTerminalText(data);
-        return;
-      }
-
-      if (data instanceof ArrayBuffer) {
-        appendTerminalText(serialDecoder.decode(new Uint8Array(data), { stream: true }));
-        return;
-      }
-
+            let message;
             try {
-        const json = JSON.parse(String(data));
-                if (json.type === 'status') {
-                    updateStatus(json.connected);
-                    return;
-                }
+                message = JSON.parse(event.data);
             } catch (e) {
-        // Not a JSON status message, treat as terminal data.
+                console.error('Invalid WebSocket payload:', event.data);
+                return;
             }
 
-      appendTerminalText(String(data));
+            if (message.type === 'status') {
+                updateStatus(message.connected);
+                return;
+            }
+
+            if (message.type === 'line') {
+                appendTerminalText(message.data || '');
+            }
         };
 
         ws.onclose = () => {

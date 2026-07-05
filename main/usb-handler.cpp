@@ -10,15 +10,16 @@
 #include <freertos/task.h>
 
 #include <usb/cdc_acm_host.h>
+#include <esp_private/cdc_host_common.h>
 #include <usb/usb_host.h>
 #include <usb/vcp.hpp>
-#include <usb/vcp_ch34x.hpp>
 // #include "usb/vcp_cp210x.hpp"
 // #include "usb/vcp_ftdi.hpp"
 
 #include <esp_http_server.h>
 
 #include "usb-handler.h"
+#include "local-ch34x-device.h"
 static const char *TAG = "VCP";
 
 using namespace esp_usb;
@@ -29,7 +30,7 @@ bool s_usb_host_installed = false;
 bool s_usb_lib_task_started = false;
 bool s_cdc_acm_installed = false;
 constexpr size_t RX_LINE_MAX_LEN = 512;
-
+constexpr TickType_t RX_FLUSH_TIMEOUT_TICKS = pdMS_TO_TICKS(50);
 std::string sanitize_for_log(const std::string &line)
 {
   std::string sanitized;
@@ -67,6 +68,7 @@ std::string sanitize_for_log(const std::string &line)
  */
 bool UsbHandler::handle_rx(const uint8_t *data, size_t data_len, void *arg)
 {
+  ESP_LOGI(TAG, "Received %d bytes of data", (int)data_len);
   if (data_len == 0 || !rx_callback || rx_queue == NULL)
   {
     return true;
@@ -150,13 +152,22 @@ void UsbHandler::usb_lib_task(void *arg)
 void UsbHandler::rx_dispatch_task()
 {
   RxMessage message;
+  TickType_t last_rx_tick = 0;
 
   while (true)
   {
-    if (xQueueReceive(rx_queue, &message, portMAX_DELAY) != pdTRUE)
+    if (xQueueReceive(rx_queue, &message, RX_FLUSH_TIMEOUT_TICKS) != pdTRUE)
     {
+      if (!rx_line_buffer.empty() && last_rx_tick != 0 && (xTaskGetTickCount() - last_rx_tick) >= RX_FLUSH_TIMEOUT_TICKS)
+      {
+        ESP_LOGI(TAG, "RX partial line timeout, flushing %u buffered bytes", (unsigned)rx_line_buffer.size());
+        flush_rx_line(false);
+        last_rx_tick = 0;
+      }
       continue;
     }
+    ESP_LOGI(TAG, "Dispatching %d bytes of RX data", (int)message.len);
+    last_rx_tick = xTaskGetTickCount();
 
     for (size_t i = 0; i < message.len; ++i)
     {
@@ -165,6 +176,7 @@ void UsbHandler::rx_dispatch_task()
       if (ch == '\n')
       {
         flush_rx_line(true);
+        last_rx_tick = 0;
         continue;
       }
 
@@ -178,6 +190,7 @@ void UsbHandler::rx_dispatch_task()
       {
         ESP_LOGW(TAG, "RX line exceeded %u bytes, flushing partial line", (unsigned)RX_LINE_MAX_LEN);
         flush_rx_line(false);
+        last_rx_tick = 0;
       }
     }
 
@@ -187,12 +200,15 @@ void UsbHandler::rx_dispatch_task()
 
 void UsbHandler::flush_rx_line(bool with_newline)
 {
+  ESP_LOGI(TAG, "Flushing RX line buffer (with_newline=%d)", with_newline);
   if (rx_line_buffer.empty() && !with_newline)
   {
     return;
   }
 
   std::string outbound = rx_line_buffer;
+  ESP_LOGI(TAG, "Flushing RX line %s (with_newline=%d)", outbound.c_str(), with_newline);
+  
   if (with_newline)
   {
     outbound.push_back('\n');
@@ -207,7 +223,7 @@ void UsbHandler::flush_rx_line(bool with_newline)
   rx_line_buffer.clear();
 }
 
-UsbHandler::UsbHandler(std::shared_ptr<LedIndicator> led) : rx_queue(NULL), rx_task_handle(NULL), ledIndicator(led)
+UsbHandler::UsbHandler(std::shared_ptr<LedIndicator> led) : rx_queue(NULL), rx_task_handle(NULL), using_vendor_ch34x_driver(false), ledIndicator(led)
 {
   device_disconnected_sem = xSemaphoreCreateBinary();
   assert(device_disconnected_sem);
@@ -294,6 +310,18 @@ void UsbHandler::usb_loop()
       cdc_acm_config.driver_task_stack_size = 4096;
       cdc_acm_config.driver_task_priority = 10;
       cdc_acm_config.xCoreID = 0;
+      cdc_acm_config.new_dev_cb = [](usb_device_handle_t usb_dev)
+      {
+        const usb_device_desc_t *device_desc = NULL;
+        if (usb_host_get_device_descriptor(usb_dev, &device_desc) == ESP_OK && device_desc != NULL)
+        {
+          ESP_LOGI(TAG, "CDC new device: VID=0x%04X PID=0x%04X", device_desc->idVendor, device_desc->idProduct);
+        }
+        else
+        {
+          ESP_LOGW(TAG, "CDC new device connected, but descriptor read failed");
+        }
+      };
 
       esp_err_t err = cdc_acm_host_install(&cdc_acm_config);
       if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
@@ -328,17 +356,45 @@ void UsbHandler::usb_loop()
       .user_arg = this,
     };
 
-    ESP_LOGI(TAG, "Opening Native CDC-ACM device (CH343/Standard ACM)...");
-    
-    // 1. Instantiate a new native CDC-ACM device object
-    auto new_device = std::make_unique<CdcAcmDevice>();
+    ESP_LOGI(TAG, "Opening CH34x VCP device...");
 
-    // 2. Call the .open() instance method on that object
-    esp_err_t open_err = new_device->open(0x1A86, 0x55D3, 1, &dev_config);
+    std::unique_ptr<CdcAcmDevice> new_device;
+    esp_err_t open_err = ESP_FAIL;
+
+    using_vendor_ch34x_driver = false;
+
+    try
+    {
+      new_device = std::make_unique<LocalCh34xDevice>(0x55D3, &dev_config, 1);
+      open_err = ESP_OK;
+      using_vendor_ch34x_driver = true;
+      ESP_LOGI(TAG, "Opened CH34x VCP device with vendor-specific driver");
+    }
+    catch (esp_err_t err)
+    {
+      open_err = err;
+      ESP_LOGW(TAG, "CH34x VCP open failed: %s. Falling back to generic CDC-ACM.", esp_err_to_name(err));
+    }
+    catch (...)
+    {
+      open_err = ESP_FAIL;
+      ESP_LOGW(TAG, "CH34x VCP open threw an unknown error. Falling back to generic CDC-ACM.");
+    }
+
+    if (open_err != ESP_OK)
+    {
+      auto generic_device = std::make_unique<CdcAcmDevice>();
+      open_err = generic_device->open(0x1A86, 0x55D3, 1, &dev_config);
+      if (open_err == ESP_OK)
+      {
+        ESP_LOGI(TAG, "Opened device with generic CDC-ACM driver");
+        using_vendor_ch34x_driver = false;
+        new_device = std::move(generic_device);
+      }
+    }
 
     if (open_err == ESP_OK)
     {
-      // 3. Move ownership to your class-level `vcp` pointer if successful
       vcp = std::move(new_device);
     }
     else
@@ -362,14 +418,17 @@ void UsbHandler::usb_loop()
         .bDataBits = DATA_BITS,
     };
     
-    // These standard CDC-ACM commands will now work perfectly because the CH343 supports them natively!
     esp_err_t target_err = vcp->line_coding_set(&line_coding);
     if (target_err != ESP_OK) {
         ESP_LOGW(TAG, "Device rejected standard line coding configuration (%s). Proceeding anyway...", esp_err_to_name(target_err));
+    } else {
+      ESP_LOGI(TAG, "Configured line coding: %d baud, data=%d parity=%d stop=%d", BAUDRATE, DATA_BITS, PARITY, STOP_BITS);
     }
     target_err = vcp->set_control_line_state(true, true);
     if (target_err != ESP_OK) {
         ESP_LOGW(TAG, "Device rejected standard control line state configuration (%s). Proceeding anyway...", esp_err_to_name(target_err));
+    } else {
+      ESP_LOGI(TAG, "Configured control line state: DTR=1 RTS=1");
     }
 
     ESP_LOGI(TAG, "CDC-ACM device connected. Waiting for disconnection...");
@@ -390,6 +449,7 @@ esp_err_t UsbHandler::tx_blocking(uint8_t *data, size_t len)
 {
   if (vcp)
   {
+      ESP_LOGI(TAG, "Transmitting %d bytes of data", (int)len);
     return vcp->tx_blocking(data, len);
   }
   return ESP_FAIL;
@@ -397,10 +457,12 @@ esp_err_t UsbHandler::tx_blocking(uint8_t *data, size_t len)
 
 void UsbHandler::set_rx_callback(std::function<void(const uint8_t* data, size_t len)> cb)
 {
-    rx_callback = cb;
+  ESP_LOGI(TAG, "Setting RX callback");
+  rx_callback = cb;
 }
 
 void UsbHandler::set_connection_callback(std::function<void(bool connected)> cb)
 {
-    connection_callback = cb;
+  ESP_LOGI(TAG, "Setting connection callback");
+  connection_callback = cb;
 }

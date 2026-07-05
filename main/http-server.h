@@ -1,8 +1,11 @@
 #ifndef _HTTP_SERVER_H
 #define _HTTP_SERVER_H
 
+#include <cstdint>
+#include <deque>
 #include <vector>
 #include <memory>
+#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <esp_http_server.h>
@@ -21,11 +24,13 @@ private:
   std::shared_ptr<UsbHandler> usbHandler;
   httpd_handle_t server = NULL;
   std::vector<int> ws_clients;
+  std::deque<std::string> recent_line_messages;
   SemaphoreHandle_t ws_clients_mutex;
   bool isUSBConnected = false;
   std::shared_ptr<LedIndicator> ledIndicator;
 
   void broadcast(const uint8_t *data, size_t len);
+  void broadcast_text_message(const std::string &message);
 
   static void ping_task_wrapper(void *arg);
 
