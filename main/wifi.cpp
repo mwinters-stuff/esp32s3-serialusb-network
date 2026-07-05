@@ -61,7 +61,7 @@ void wifi_init_sta(std::shared_ptr<LedIndicator> ledIndicator)
         auto led = static_cast<LedIndicator *>(arg);
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI("wifi", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
-        if (led) led->setState(LedState::IDLE); }, ledIndicator.get(), &instance_got_ip));
+        if (led) led->setState(LedState::NETWORK_CONNECTED); }, ledIndicator.get(), &instance_got_ip));
 
     // Wait until got IP
     while (true)

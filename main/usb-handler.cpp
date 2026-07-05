@@ -12,6 +12,7 @@
 #include <usb/cdc_acm_host.h>
 #include <esp_private/cdc_host_common.h>
 #include <usb/usb_host.h>
+#include <usb/vcp_ch34x.h>
 #include <usb/vcp.hpp>
 // #include "usb/vcp_cp210x.hpp"
 // #include "usb/vcp_ftdi.hpp"
@@ -359,37 +360,69 @@ void UsbHandler::usb_loop()
     ESP_LOGI(TAG, "Opening CH34x VCP device...");
 
     std::unique_ptr<CdcAcmDevice> new_device;
-    esp_err_t open_err = ESP_FAIL;
+    esp_err_t open_err = ESP_ERR_NOT_FOUND;
 
     using_vendor_ch34x_driver = false;
 
-    try
+    const uint8_t candidate_interfaces[] = {0, 1};
+    const uint16_t candidate_pids[] = {CH34X_PID_AUTO, CH340_PID_1, CH340_PID, CH341_PID, 0x55D3};
+
+    for (uint8_t interface_idx : candidate_interfaces)
     {
-      new_device = std::make_unique<LocalCh34xDevice>(0x55D3, &dev_config, 1);
-      open_err = ESP_OK;
-      using_vendor_ch34x_driver = true;
-      ESP_LOGI(TAG, "Opened CH34x VCP device with vendor-specific driver");
-    }
-    catch (esp_err_t err)
-    {
-      open_err = err;
-      ESP_LOGW(TAG, "CH34x VCP open failed: %s. Falling back to generic CDC-ACM.", esp_err_to_name(err));
-    }
-    catch (...)
-    {
-      open_err = ESP_FAIL;
-      ESP_LOGW(TAG, "CH34x VCP open threw an unknown error. Falling back to generic CDC-ACM.");
+      for (uint16_t pid : candidate_pids)
+      {
+        ESP_LOGI(TAG, "Trying CH34x vendor-specific open: pid=0x%04X interface=%u", pid, interface_idx);
+        try
+        {
+          new_device = std::make_unique<LocalCh34xDevice>(pid, &dev_config, interface_idx);
+          open_err = ESP_OK;
+          using_vendor_ch34x_driver = true;
+          ESP_LOGI(TAG, "Opened CH34x VCP device with vendor-specific driver (pid=0x%04X interface=%u)", pid, interface_idx);
+          break;
+        }
+        catch (esp_err_t err)
+        {
+          open_err = err;
+        }
+        catch (...)
+        {
+          open_err = ESP_FAIL;
+        }
+      }
+
+      if (open_err == ESP_OK)
+      {
+        break;
+      }
     }
 
     if (open_err != ESP_OK)
     {
-      auto generic_device = std::make_unique<CdcAcmDevice>();
-      open_err = generic_device->open(0x1A86, 0x55D3, 1, &dev_config);
-      if (open_err == ESP_OK)
+      for (uint8_t interface_idx : candidate_interfaces)
       {
-        ESP_LOGI(TAG, "Opened device with generic CDC-ACM driver");
-        using_vendor_ch34x_driver = false;
-        new_device = std::move(generic_device);
+        for (uint16_t pid : candidate_pids)
+        {
+          if (pid == CH34X_PID_AUTO)
+          {
+            continue;
+          }
+
+          auto generic_device = std::make_unique<CdcAcmDevice>();
+          ESP_LOGI(TAG, "Trying generic CDC-ACM open: vid=0x%04X pid=0x%04X interface=%u", NANJING_QINHENG_MICROE_VID, pid, interface_idx);
+          open_err = generic_device->open(NANJING_QINHENG_MICROE_VID, pid, interface_idx, &dev_config);
+          if (open_err == ESP_OK)
+          {
+            ESP_LOGI(TAG, "Opened device with generic CDC-ACM driver (pid=0x%04X interface=%u)", pid, interface_idx);
+            using_vendor_ch34x_driver = false;
+            new_device = std::move(generic_device);
+            break;
+          }
+        }
+
+        if (open_err == ESP_OK)
+        {
+          break;
+        }
       }
     }
 
@@ -434,7 +467,7 @@ void UsbHandler::usb_loop()
     ESP_LOGI(TAG, "CDC-ACM device connected. Waiting for disconnection...");
     xSemaphoreTake(device_disconnected_sem, portMAX_DELAY);
 
-    ledIndicator->setState(LedState::IDLE);
+    ledIndicator->setState(LedState::NETWORK_CONNECTED);
 
     if (connection_callback) {
         connection_callback(false);

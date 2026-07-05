@@ -5,7 +5,7 @@
 
 static const char *TAG = "LED";
 
-LedIndicator::LedIndicator() : currentState(LedState::IDLE), strip_handle(NULL) {
+LedIndicator::LedIndicator() : currentState(LedState::WIFI_DISCONNECTED), strip_handle(NULL) {
     stateMutex = xSemaphoreCreateMutex();
 }
 
@@ -79,10 +79,9 @@ void LedIndicator::run() {
         LedState localState = getState();
 
         switch (localState) {
-            case LedState::IDLE:                pulse(0, 0, 255); break; // Pulsing Blue
+            case LedState::NETWORK_CONNECTED:   setColor(255, 255, 0); break; // Solid Yellow
             case LedState::WIFI_DISCONNECTED:   pulse(255, 165, 0); break; // Pulsing Orange
             case LedState::USB_CONNECTED:       setColor(0, 255, 0); break; // Solid Green
-            case LedState::WEB_TERMINAL_ACTIVE: setColor(0, 255, 255); break; // Solid Cyan
             case LedState::UPLOADING:           pulse(255, 0, 255); break; // Pulsing Magenta
             case LedState::ERROR:               setColor(255, 0, 0); break; // Solid Red
         }

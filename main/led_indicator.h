@@ -10,10 +10,9 @@
 #define LED_PIN 48
 
 enum class LedState {
-    IDLE,                   // System on, no USB connection (Pulsing Blue)
+    NETWORK_CONNECTED,      // WiFi connected, no USB connection
     WIFI_DISCONNECTED,      // WiFi is not connected (Pulsing Orange)
-    USB_CONNECTED,          // USB connected, no web activity (Solid Green)
-    WEB_TERMINAL_ACTIVE,    // Web terminal is being used (Solid Cyan)
+    USB_CONNECTED,          // USB connected (Solid Green)
     UPLOADING,              // Firmware/FS upload in progress (Pulsing Magenta)
     ERROR                   // An error state (Solid Red)
 };

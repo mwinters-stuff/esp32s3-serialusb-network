@@ -372,11 +372,6 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
       // Check for duplicates in case of rapid reconnects.
       if (std::find(ws_clients.begin(), ws_clients.end(), fd) == ws_clients.end())
       {
-        // If this is the first client, change the LED state
-        if (ws_clients.empty() && ledIndicator)
-        {
-          ledIndicator->setState(LedState::WEB_TERMINAL_ACTIVE);
-        }
         ws_clients.push_back(fd);
       }
       replay_messages = recent_line_messages;
@@ -421,7 +416,46 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
   }
 
   // Output-only mode for stability: ignore inbound websocket frames for now.
-  // The previous recv path was destabilizing the socket with malformed-frame handling.
+  // Re-enabled inbound text path so browser can transmit to the USB device.
+  httpd_ws_frame_t ws_pkt = {};
+  esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+  if (ret != ESP_OK)
+  {
+    ESP_LOGW(TAG, "WS recv (header) failed on fd %d with %d", httpd_req_to_sockfd(req), ret);
+    return ret;
+  }
+
+  if (ws_pkt.len == 0)
+  {
+    return ESP_OK;
+  }
+
+  std::vector<uint8_t> payload(ws_pkt.len + 1, 0);
+  ws_pkt.payload = payload.data();
+  ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+  if (ret != ESP_OK)
+  {
+    ESP_LOGW(TAG, "WS recv (payload) failed on fd %d with %d", httpd_req_to_sockfd(req), ret);
+    return ret;
+  }
+
+  if (ws_pkt.type == HTTPD_WS_TYPE_TEXT || ws_pkt.type == HTTPD_WS_TYPE_BINARY)
+  {
+    ESP_LOGI(TAG, "WS inbound frame type=%d len=%u", ws_pkt.type, (unsigned)ws_pkt.len);
+    if (usbHandler && usbHandler->isConnected())
+    {
+      esp_err_t tx_ret = usbHandler->tx_blocking(payload.data(), ws_pkt.len);
+      if (tx_ret != ESP_OK)
+      {
+        ESP_LOGW(TAG, "USB tx_blocking failed: %s", esp_err_to_name(tx_ret));
+      }
+    }
+    else
+    {
+      ESP_LOGW(TAG, "Dropping WS outbound data: USB not connected");
+    }
+  }
+
   return ESP_OK;
 }
 
@@ -629,7 +663,7 @@ void HttpServer::handle_client_close(int sockfd)
         }
         else
         {
-          ledIndicator->setState(LedState::IDLE);
+          ledIndicator->setState(LedState::NETWORK_CONNECTED);
         }
       }
     }
