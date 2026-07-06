@@ -1,21 +1,19 @@
 #ifndef _LED_INDICATOR_H
 #define _LED_INDICATOR_H
 
-// IWYU pragma: keep
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <led_strip.h>
-
+#include <stdint.h>
 
 // IMPORTANT: Configure your addressable LED GPIO here
 // Common for ESP32-S3 devkits with on-board RGB LEDs is GPIO 48
 #define LED_PIN 48
 
 enum class LedState {
-    IDLE,                   // System on, no USB connection (Pulsing Blue)
+    NETWORK_CONNECTED,      // WiFi connected, no USB connection
     WIFI_DISCONNECTED,      // WiFi is not connected (Pulsing Orange)
-    USB_CONNECTED,          // USB connected, no web activity (Solid Green)
-    WEB_TERMINAL_ACTIVE,    // Web terminal is being used (Solid Cyan)
+    USB_CONNECTED,          // USB connected (Solid Green)
     UPLOADING,              // Firmware/FS upload in progress (Pulsing Magenta)
     ERROR                   // An error state (Solid Red)
 };

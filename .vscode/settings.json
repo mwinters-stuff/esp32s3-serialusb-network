@@ -1,30 +1,20 @@
 {
   "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}/build",
+    "--query-driver=${env:HOME}/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin/xtensa-esp32s3-elf-*",
+    "--header-insertion=never"
+  ],
+  "idf.espIdfPath": "${env:HOME}/src/esp/esp-idf",
+  "idf.pythonInstallPath": "/usr/bin/python3",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
   "idf.port": "/dev/ttyACM0",
+  "idf.toolsPath": "${env:HOME}/.espressif",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
   "idf.flashType": "UART",
-  "files.autoSave": "afterDelay",
-  "idf.notificationMode": "Silent",
-  "editor.tabSize": 2,
-  "editor.detectIndentation": false,
-  "editor.formatOnSave": true,
-  "idf.currentSetup": "/home/mathew/.espressif/v5.5.4/esp-idf",
-  "clangd.path": "/home/mathew/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
-  "clangd.arguments": [
-    "--background-index",
-    "--query-driver=**",
-    "--compile-commands-dir=/home/mathew/src/esp32s3-serialusb-network/build"
-  ],
-  "terminal.integrated.defaultProfile.linux": "bash",
-  "terminal.integrated.profiles.linux": {
-    "bash": {
-      "path": "/bin/bash",
-      "args": []
-    }
-  },
+  "idf.currentSetup": "${env:HOME}/.espressif/v5.5.4/esp-idf"
 }

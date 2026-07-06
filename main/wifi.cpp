@@ -1,6 +1,7 @@
 
 #include <memory>
-#include <string.h>
+
+#include "config.h"
 
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
@@ -8,9 +9,7 @@
 #include <freertos/task.h>
 
 #include <esp_wifi.h>
-#include <nvs_flash.h>
 
-#include "config.h"
 #include "led_indicator.h"
 
 void wifi_init_sta(std::shared_ptr<LedIndicator> ledIndicator) {
@@ -22,8 +21,10 @@ void wifi_init_sta(std::shared_ptr<LedIndicator> ledIndicator) {
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
   wifi_config_t wifi_config = {};
-  strcpy((char *)wifi_config.sta.ssid, WIFI_SSID);
-  strcpy((char *)wifi_config.sta.password, WIFI_PASSWORD);
+  strncpy((char *)wifi_config.sta.ssid, WIFI_SSID,
+          sizeof(wifi_config.sta.ssid) - 1);
+  strncpy((char *)wifi_config.sta.password, WIFI_PASSWORD,
+          sizeof(wifi_config.sta.password) - 1);
 
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
@@ -62,7 +63,7 @@ void wifi_init_sta(std::shared_ptr<LedIndicator> ledIndicator) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI("wifi", "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         if (led)
-          led->setState(LedState::IDLE);
+          led->setState(LedState::NETWORK_CONNECTED);
       },
       ledIndicator.get(), &instance_got_ip));
 

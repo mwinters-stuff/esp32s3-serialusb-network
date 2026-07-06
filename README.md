@@ -19,6 +19,16 @@ The drivers are fetched from [ESP Component Registry](https://components.espress
 3. Now you can use the usual CDC-ACM API to control the device and send data. Data are received in `handle_rx` callback
 4. Try disconnecting and then reconnecting of the USB device to experiment with USB hotplugging
 
+### ESP-IDF 6.x FTDI note
+
+With `usb_host_ftdi_vcp` v2.1.x (used with ESP-IDF 6.x), FTDI ignores non-zero
+`in_buffer_size` and logs a warning such as:
+
+`W (...) FTDI: RX FIFO size 256 is not supported, setting to 0`
+
+This project probes FTDI first using `in_buffer_size = 0`, then falls back to
+generic VCP settings for other adapters (CP210x/CH34x).
+
 ### Hardware Required
 
 * Development board with USB-OTG support

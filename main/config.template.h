@@ -17,10 +17,14 @@
 #define PARITY (0)    // 0: None, 1: Odd, 2: Even, 3: Mark, 4: Space
 #define DATA_BITS (8)
 
+#define ENABLE_W5500_ETH 1
 #define W5500_CS_PIN 10       // CS (can also use GPIO12)
 #define W5500_SCK_PIN 14      // CLK
 #define W5500_MISO_PIN 13     // MISO
 #define W5500_MOSI_PIN 11     // MOSI
-#define W5500_RST_PIN 2       // Reset 
-#define W5500_INT_PIN 3       // Interrupt (optional)
+#define W5500_RST_PIN 2       // Reset
+#define W5500_INT_PIN -1      // Interrupt (optional)
+
+
+
 #endif

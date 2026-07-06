@@ -3,9 +3,11 @@
 
 #include <memory>
 #include <functional>
+#include <string>
 
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 
@@ -21,18 +23,35 @@
 class UsbHandler
 {
 private:
+  struct RxMessage
+  {
+    uint8_t *data;
+    size_t len;
+  };
+
   // Callback for received data
   std::function<void(const uint8_t* data, size_t len)> rx_callback;
   // Callback for connection status changes
   std::function<void(bool connected)> connection_callback;
 
   SemaphoreHandle_t device_disconnected_sem;
+  QueueHandle_t rx_queue;
+  TaskHandle_t rx_task_handle;
+  std::string rx_line_buffer;
+  bool using_vendor_ch34x_driver;
   std::unique_ptr<CdcAcmDevice> vcp;
   std::shared_ptr<LedIndicator> ledIndicator;
+
+  bool s_usb_host_installed = false;
+  bool s_usb_lib_task_started = false;
+  bool s_cdc_acm_installed = false;
+
 
   bool handle_rx(const uint8_t *data, size_t data_len, void *arg);
   void handle_event(const cdc_acm_host_dev_event_data_t *event, void *user_ctx);
   void usb_lib_task(void *arg);
+  void rx_dispatch_task();
+  void flush_rx_line(bool with_newline);
 
 public:
   UsbHandler(std::shared_ptr<LedIndicator> led);

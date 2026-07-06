@@ -1,10 +1,13 @@
 #ifndef _HTTP_SERVER_H
 #define _HTTP_SERVER_H
 
+#include <cstdint>
+#include <deque>
+#include <vector>
+#include <memory>
+#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include <vector>
-
 #include <esp_http_server.h>
 #include <esp_https_ota.h>
 #include <esp_log.h>
@@ -12,19 +15,22 @@
 #include <esp_partition.h>
 #include <usb/cdc_acm_host.h>
 
-#include "led_indicator.h"
 #include "usb-handler.h"
+#include "led_indicator.h"
 
-class HttpServer {
+class HttpServer
+{
 private:
   std::shared_ptr<UsbHandler> usbHandler;
   httpd_handle_t server = NULL;
   std::vector<int> ws_clients;
+  std::deque<std::string> recent_line_messages;
   SemaphoreHandle_t ws_clients_mutex;
   bool isUSBConnected = false;
   std::shared_ptr<LedIndicator> ledIndicator;
 
   void broadcast(const uint8_t *data, size_t len);
+  void broadcast_text_message(const std::string &message);
 
   static void ping_task_wrapper(void *arg);
 
@@ -40,17 +46,12 @@ private:
   bool is_authenticated(httpd_req_t *req);
 
   void handle_client_close(int sockfd);
-
 public:
-  HttpServer(std::shared_ptr<UsbHandler> usbHandler,
-             std::shared_ptr<LedIndicator> led);
+  HttpServer(std::shared_ptr<UsbHandler> usbHandler, std::shared_ptr<LedIndicator> led);
   virtual ~HttpServer();
 
   httpd_handle_t start();
   void ping_task();
-
-  // Send log message to all connected web clients
-  void log_to_web(const uint8_t *data, size_t len);
 };
 
 #endif
