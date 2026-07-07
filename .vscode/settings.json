@@ -2,19 +2,19 @@
   "C_Cpp.intelliSenseEngine": "disabled",
   "clangd.arguments": [
     "--compile-commands-dir=${workspaceFolder}/build",
-    "--query-driver=${env:HOME}/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin/xtensa-esp32s3-elf-*",
+    "--query-driver=${userHome}/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin/xtensa-esp32s3-elf-*",
     "--header-insertion=never"
   ],
-  "idf.espIdfPath": "${env:HOME}/src/esp/esp-idf",
+  "idf.espIdfPath": "${userHome}/src/esp/esp-idf",
   "idf.pythonInstallPath": "/usr/bin/python3",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
   "idf.port": "/dev/ttyACM0",
-  "idf.toolsPath": "${env:HOME}/.espressif",
+  "idf.toolsPath": "${userHome}/.espressif",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
   "idf.flashType": "UART",
-  "idf.currentSetup": "${env:HOME}/.espressif/v5.5.4/esp-idf"
+  "idf.currentSetup": "/home/mathew/.espressif/v5.5.4/esp-idf"
 }
