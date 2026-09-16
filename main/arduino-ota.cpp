@@ -9,7 +9,9 @@
 #include <unistd.h>
 
 #include <esp_log.h>
+#include <esp_littlefs.h>
 #include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_random.h>
 #include <esp_system.h>
 #include <freertos/FreeRTOS.h>
@@ -256,6 +258,121 @@ static void run_update(const struct sockaddr_in &remote, uint16_t host_port, siz
   esp_restart();
 }
 
+static void run_filesystem_update(const struct sockaddr_in &remote, uint16_t host_port, size_t size,
+                                  const char *expected_md5)
+{
+  const esp_partition_t *filesystem = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_LITTLEFS, "littlefs");
+  if (!filesystem || size > filesystem->size)
+  {
+    ESP_LOGE(TAG, "LittleFS image is missing or too large (%u bytes)", (unsigned)size);
+    return;
+  }
+
+  int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (sock < 0)
+  {
+    ESP_LOGE(TAG, "socket() failed: %d", errno);
+    return;
+  }
+
+  struct sockaddr_in dest = remote;
+  dest.sin_port = htons(host_port);
+  if (connect(sock, (struct sockaddr *)&dest, sizeof(dest)) != 0)
+  {
+    ESP_LOGE(TAG, "Connect back to host failed: %d", errno);
+    close(sock);
+    return;
+  }
+  set_recv_timeout(sock, 10000);
+
+  if (s_led) s_led->setState(LedState::UPLOADING);
+  esp_vfs_littlefs_unregister("littlefs");
+
+  esp_err_t err = esp_partition_erase_range(filesystem, 0, filesystem->size);
+  if (err != ESP_OK)
+  {
+    ESP_LOGE(TAG, "LittleFS erase failed: %s", esp_err_to_name(err));
+    send(sock, "ERR: LittleFS erase failed\n", 27, 0);
+    close(sock);
+    if (s_led) s_led->setState(LedState::ERROR);
+    return;
+  }
+
+  uint8_t *buf = (uint8_t *)malloc(OTA_CHUNK_SIZE);
+  if (!buf)
+  {
+    send(sock, "ERR: No memory\n", 15, 0);
+    close(sock);
+    if (s_led) s_led->setState(LedState::ERROR);
+    return;
+  }
+
+  mbedtls_md5_context md5;
+  mbedtls_md5_init(&md5);
+  mbedtls_md5_starts(&md5);
+  size_t received = 0;
+  bool ok = true;
+  while (received < size)
+  {
+    const size_t want = (size - received) < OTA_CHUNK_SIZE ? (size - received) : OTA_CHUNK_SIZE;
+    int r = recv(sock, buf, want, 0);
+    if (r <= 0 || esp_partition_write(filesystem, received, buf, r) != ESP_OK)
+    {
+      ESP_LOGE(TAG, "LittleFS write failed after %u bytes", (unsigned)received);
+      ok = false;
+      break;
+    }
+
+    mbedtls_md5_update(&md5, buf, r);
+    received += r;
+    char ack[16];
+    int ack_len = snprintf(ack, sizeof(ack), "%d", r);
+    if (send(sock, ack, ack_len, 0) < 0)
+    {
+      ok = false;
+      break;
+    }
+  }
+
+  uint8_t digest[16];
+  mbedtls_md5_finish(&md5, digest);
+  mbedtls_md5_free(&md5);
+  free(buf);
+
+  if (ok && expected_md5[0] != '\0')
+  {
+    char actual[33];
+    for (int i = 0; i < 16; i++)
+    {
+      sprintf(actual + (i * 2), "%02x", digest[i]);
+    }
+    actual[32] = '\0';
+    ok = strcasecmp(actual, expected_md5) == 0;
+    if (!ok)
+    {
+      ESP_LOGE(TAG, "LittleFS MD5 mismatch: got %s expected %s", actual, expected_md5);
+    }
+  }
+
+  if (ok)
+  {
+    send(sock, "OK", 2, 0);
+    ESP_LOGI(TAG, "LittleFS OTA complete (%u bytes). Rebooting...", (unsigned)received);
+  }
+  else
+  {
+    send(sock, "ERR: LittleFS image validation failed\n", 38, 0);
+    if (s_led) s_led->setState(LedState::ERROR);
+    close(sock);
+    return;
+  }
+
+  close(sock);
+  vTaskDelay(pdMS_TO_TICKS(500));
+  esp_restart();
+}
+
 static void arduino_ota_task(void *arg)
 {
   int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -304,8 +421,21 @@ static void arduino_ota_task(void *arg)
 
     if (cmd == OTA_CMD_SPIFFS)
     {
-      ESP_LOGW(TAG, "Filesystem upload over espota is not supported; use the web upload page");
-      udp_reply(sock, from, "ERR: Filesystem OTA not supported");
+      const esp_partition_t *filesystem = esp_partition_find_first(
+          ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_LITTLEFS, "littlefs");
+      if (!filesystem || size == 0 || size > filesystem->size)
+      {
+        udp_reply(sock, from, "ERR: Bad LittleFS image size");
+        continue;
+      }
+      ESP_LOGI(TAG, "LittleFS OTA invitation from %s:%d, %u bytes",
+               inet_ntoa(from.sin_addr), host_port, size);
+      if (strlen(OTA_PASSWORD) > 0 && !authenticate(sock, from))
+      {
+        continue;
+      }
+      udp_reply(sock, from, "OK");
+      run_filesystem_update(from, (uint16_t)host_port, size, md5);
       continue;
     }
 

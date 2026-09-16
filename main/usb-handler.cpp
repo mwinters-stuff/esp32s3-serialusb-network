@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include <esp_log.h>
+#include <nvs.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -32,6 +33,39 @@ namespace
 }
 
 // Buffer for received data
+constexpr char USB_NVS_NAMESPACE[] = "usb";
+constexpr char CH34X_PID_NVS_KEY[] = "ch34x_pid";
+
+  bool load_saved_ch34x_pid(uint16_t *pid)
+  {
+  nvs_handle_t handle;
+  if (nvs_open(USB_NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK)
+  {
+    return false;
+  }
+
+  const esp_err_t err = nvs_get_u16(handle, CH34X_PID_NVS_KEY, pid);
+  nvs_close(handle);
+  return err == ESP_OK;
+  }
+
+  void save_ch34x_pid(uint16_t pid)
+  {
+  nvs_handle_t handle;
+  if (nvs_open(USB_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Unable to open NVS for CH34x PID");
+    return;
+  }
+
+  const esp_err_t set_err = nvs_set_u16(handle, CH34X_PID_NVS_KEY, pid);
+  const esp_err_t commit_err = set_err == ESP_OK ? nvs_commit(handle) : set_err;
+  nvs_close(handle);
+  if (commit_err != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Unable to save CH34x PID 0x%04X: %s", pid, esp_err_to_name(commit_err));
+  }
+  }
 
 /**
  * @brief Data received callback
@@ -346,17 +380,44 @@ void UsbHandler::usb_loop()
     using_vendor_ch34x_driver = false;
 
     const uint8_t candidate_interfaces[] = {0, 1};
-    const uint16_t candidate_pids[] = {CH34X_PID_AUTO, CH340_PID_1, CH340_PID, CH341_PID, 0x55D3};
+      const uint16_t default_candidate_pids[] = {0x55D3, CH34X_PID_AUTO, CH340_PID_1, CH340_PID, CH341_PID};
+      uint16_t candidate_pids[sizeof(default_candidate_pids) / sizeof(default_candidate_pids[0]) + 1];
+      size_t candidate_pid_count = 0;
+      uint16_t saved_pid = 0;
+      if (load_saved_ch34x_pid(&saved_pid))
+      {
+        candidate_pids[candidate_pid_count++] = saved_pid;
+        ESP_LOGI(TAG, "Trying saved CH34x PID first: pid=0x%04X", saved_pid);
+      }
+      for (uint16_t pid : default_candidate_pids)
+      {
+        bool already_added = false;
+        for (size_t i = 0; i < candidate_pid_count; i++)
+        {
+          if (candidate_pids[i] == pid)
+          {
+            already_added = true;
+            break;
+          }
+        }
+        if (!already_added)
+        {
+          candidate_pids[candidate_pid_count++] = pid;
+        }
+      }
+      uint16_t opened_pid = 0;
 
     for (uint8_t interface_idx : candidate_interfaces)
     {
-      for (uint16_t pid : candidate_pids)
+        for (size_t pid_index = 0; pid_index < candidate_pid_count; pid_index++)
       {
+          const uint16_t pid = candidate_pids[pid_index];
         ESP_LOGI(TAG, "Trying CH34x vendor-specific open: pid=0x%04X interface=%u", pid, interface_idx);
         try
         {
           new_device = std::make_unique<LocalCh34xDevice>(pid, &dev_config, interface_idx);
           open_err = ESP_OK;
+          opened_pid = pid;
           using_vendor_ch34x_driver = true;
           ESP_LOGI(TAG, "Opened CH34x VCP device with vendor-specific driver (pid=0x%04X interface=%u)", pid, interface_idx);
           break;
@@ -394,6 +455,7 @@ void UsbHandler::usb_loop()
           if (open_err == ESP_OK)
           {
             ESP_LOGI(TAG, "Opened device with generic CDC-ACM driver (pid=0x%04X interface=%u)", pid, interface_idx);
+            opened_pid = pid;
             using_vendor_ch34x_driver = false;
             new_device = std::move(generic_device);
             break;
@@ -410,6 +472,7 @@ void UsbHandler::usb_loop()
     if (open_err == ESP_OK)
     {
       vcp = std::move(new_device);
+      save_ch34x_pid(opened_pid);
     }
     else
     {

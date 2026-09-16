@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload the ESP-IDF application image through the firmware's ArduinoOTA listener."""
+"""Upload an application or LittleFS image through the ArduinoOTA listener."""
 
 import argparse
 import os
@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_IMAGE = ROOT / "build" / "esp32s3-serialusb-network.bin"
+DEFAULT_FILESYSTEM_IMAGE = ROOT / "build" / "littlefs.bin"
 DEFAULT_CONFIG = ROOT / "main" / "config.h"
 
 
@@ -51,8 +52,8 @@ def find_espota() -> Path | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("device", help="ESP32 IP address or hostname")
-    parser.add_argument("-f", "--file", type=Path, default=DEFAULT_IMAGE,
-                        help=f"firmware image (default: {DEFAULT_IMAGE.relative_to(ROOT)})")
+    parser.add_argument("-f", "--file", type=Path,
+                        help="image file (defaults to the application or LittleFS build image)")
     parser.add_argument("-p", "--port", type=int, default=3232,
                         help="ESP32 OTA UDP port (default: 3232)")
     parser.add_argument("-I", "--host-ip", default="0.0.0.0",
@@ -65,9 +66,13 @@ def main() -> int:
                         help="path to espota.py (otherwise search common installations)")
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument("-r", "--progress", action="store_true")
+    parser.add_argument("-s", "--spiffs", action="store_true",
+                        help="upload a LittleFS image instead of application firmware")
     args = parser.parse_args()
 
-    image = args.file if args.file.is_absolute() else ROOT / args.file
+    default_image = DEFAULT_FILESYSTEM_IMAGE if args.spiffs else DEFAULT_IMAGE
+    image_arg = args.file if args.file is not None else default_image
+    image = image_arg if image_arg.is_absolute() else ROOT / image_arg
     if not image.is_file():
         parser.error(f"firmware image not found: {image}")
 
@@ -91,6 +96,8 @@ def main() -> int:
         command.append("-d")
     if args.progress:
         command.append("-r")
+    if args.spiffs:
+        command.append("-s")
 
     return subprocess.run(command, cwd=ROOT).returncode
 

@@ -84,6 +84,12 @@ Use the device IP instead of `train-serial.local` when mDNS is unavailable. The
 script uses `build/esp32s3-serialusb-network.bin` and reads the OTA password from
 `main/config.h`; override these with `--file` and `--password` when needed.
 
+To upload the LittleFS image instead, use:
+
+```bash
+python3 scripts/ota_upload.py --spiffs train-serial.local
+```
+
 4. If you use the W5500 module ensure the W5500 Ethernet driver is enabled in `idf.py menuconfig` (Component config → Ethernet → SPI W5500) and that websocket support is enabled in the HTTP Server (Component config → HTTP Server → Enable Websocket support).
 
 ---
