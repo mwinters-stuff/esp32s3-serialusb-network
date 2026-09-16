@@ -36,3 +36,4 @@ managed_components/**
 dependencies.lock
 main/config.h
 .cache/**
+scripts/__pycache__/**
