@@ -25,12 +25,16 @@ private:
   httpd_handle_t server = NULL;
   std::vector<int> ws_clients;
   std::deque<std::string> recent_line_messages;
+  size_t max_open_sockets = 0;
   SemaphoreHandle_t ws_clients_mutex;
   bool isUSBConnected = false;
   std::shared_ptr<LedIndicator> ledIndicator;
 
   void broadcast(const uint8_t *data, size_t len);
   void broadcast_text_message(const std::string &message);
+  std::string usb_status_message();
+  esp_err_t queue_text_message_from_handler(int fd, const std::string &message);
+  void refresh_ws_clients_locked();
 
   static void ping_task_wrapper(void *arg);
 
@@ -39,6 +43,7 @@ private:
   esp_err_t websocket_handler(httpd_req_t *req);
   esp_err_t fs_upload_handler(httpd_req_t *req);
   esp_err_t upload_page_handler(httpd_req_t *req);
+  esp_err_t info_handler(httpd_req_t *req);
 
   esp_err_t login_page_handler(httpd_req_t *req);
   esp_err_t login_post_handler(httpd_req_t *req);

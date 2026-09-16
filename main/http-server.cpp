@@ -13,11 +13,13 @@
 #error "WebSocket support is not enabled. Please run 'idf.py menuconfig', go to Component config -> HTTP Server, and enable [ ] Enable Websocket support."
 #endif
 
+#include <esp_app_desc.h>
 #include <esp_https_ota.h>
 #include <esp_littlefs.h>
 #include <esp_log.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
+#include <esp_system.h>
 #include <usb/cdc_acm_host.h>
 
 #include "config.h"
@@ -31,9 +33,32 @@ constexpr size_t MAX_RECENT_LINE_MESSAGES = 64;
 
 struct WsSendAsyncContext
 {
+  httpd_handle_t server;
   int fd;
-  std::string *message;
+  std::string message;
 };
+
+void send_ws_text_work(void *arg)
+{
+  std::unique_ptr<WsSendAsyncContext> ctx(static_cast<WsSendAsyncContext *>(arg));
+
+  if (httpd_ws_get_fd_info(ctx->server, ctx->fd) != HTTPD_WS_CLIENT_WEBSOCKET)
+  {
+    ESP_LOGW(TAG, "Skipping queued WS send to inactive fd %d", ctx->fd);
+    return;
+  }
+
+  httpd_ws_frame_t ws_pkt = {};
+  ws_pkt.payload = reinterpret_cast<uint8_t *>(ctx->message.data());
+  ws_pkt.len = ctx->message.size();
+  ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+
+  esp_err_t ret = httpd_ws_send_frame_async(ctx->server, ctx->fd, &ws_pkt);
+  if (ret != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Queued WS send failed on fd %d with %d", ctx->fd, ret);
+  }
+}
 
 std::string json_escape(const uint8_t *data, size_t len)
 {
@@ -297,7 +322,7 @@ void HttpServer::broadcast(const uint8_t *data, size_t len)
   payload += json_escape(data, len);
   payload += "\"}";
 
-  ESP_LOGD(TAG, "Sending terminal line: %s", payload.c_str());
+  ESP_LOGD(TAG, "Terminal RX reached HTTP: %u bytes", (unsigned)len);
 
   if (xSemaphoreTake(ws_clients_mutex, portMAX_DELAY) == pdTRUE)
   {
@@ -324,6 +349,9 @@ void HttpServer::broadcast_text_message(const std::string &message)
     ESP_LOGW(TAG, "Broadcasting no semiphore");
     return;
   }
+
+  refresh_ws_clients_locked();
+  ESP_LOGD(TAG, "Broadcasting WS text len=%u to %u client(s)", (unsigned)message.size(), (unsigned)ws_clients.size());
 
   // Using an iterator-based loop is safer for erasing elements.
   for (auto it = ws_clients.begin(); it != ws_clients.end();)
@@ -357,6 +385,59 @@ void HttpServer::broadcast_text_message(const std::string &message)
   xSemaphoreGive(ws_clients_mutex);
 }
 
+void HttpServer::refresh_ws_clients_locked()
+{
+  if (!server || max_open_sockets == 0)
+  {
+    return;
+  }
+
+  std::vector<int> client_fds(max_open_sockets);
+  size_t client_count = client_fds.size();
+  esp_err_t ret = httpd_get_client_list(server, &client_count, client_fds.data());
+  if (ret != ESP_OK)
+  {
+    ESP_LOGW(TAG, "Failed to refresh WS clients: %d", ret);
+    return;
+  }
+
+  ws_clients.clear();
+  for (size_t i = 0; i < client_count; ++i)
+  {
+    int fd = client_fds[i];
+    if (httpd_ws_get_fd_info(server, fd) == HTTPD_WS_CLIENT_WEBSOCKET)
+    {
+      ws_clients.push_back(fd);
+    }
+  }
+}
+
+std::string HttpServer::usb_status_message()
+{
+  if (usbHandler)
+  {
+    isUSBConnected = usbHandler->isConnected();
+  }
+
+  return isUSBConnected ? "{\"type\":\"status\",\"connected\":true}" : "{\"type\":\"status\",\"connected\":false}";
+}
+
+esp_err_t HttpServer::queue_text_message_from_handler(int fd, const std::string &message)
+{
+  auto *ctx = new (std::nothrow) WsSendAsyncContext{this->server, fd, message};
+  if (!ctx)
+  {
+    return ESP_ERR_NO_MEM;
+  }
+
+  esp_err_t ret = httpd_queue_work(this->server, send_ws_text_work, ctx);
+  if (ret != ESP_OK)
+  {
+    delete ctx;
+  }
+  return ret;
+}
+
 esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
 {
   // The WebSocket handler is called once when the client connects.
@@ -377,35 +458,21 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
       replay_messages = recent_line_messages;
       xSemaphoreGive(ws_clients_mutex);
 
-      if (usbHandler)
+      std::string resp = usb_status_message();
+      ESP_LOGI(TAG, "New client connected, USB status: %s", isUSBConnected ? "connected" : "disconnected");
+
+      esp_err_t status_ret = queue_text_message_from_handler(fd, resp);
+      if (status_ret != ESP_OK)
       {
-        isUSBConnected = usbHandler->isConnected();
-        ESP_LOGI(TAG, "New client connected, USB status: %s", isUSBConnected ? "connected" : "disconnected");
-        std::string resp = isUSBConnected ? "{\"type\":\"status\",\"connected\":true}" : "{\"type\":\"status\",\"connected\":false}";
-
-        httpd_ws_frame_t status_pkt = {};
-        status_pkt.payload = (uint8_t *)resp.data();
-        status_pkt.len = resp.size();
-        status_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-        esp_err_t status_ret = httpd_ws_send_frame(req, &status_pkt);
-        if (status_ret != ESP_OK)
-        {
-          ESP_LOGW(TAG, "Initial status send failed on fd %d with %d", fd, status_ret);
-        }
+        ESP_LOGW(TAG, "Initial status queue failed on fd %d with %d", fd, status_ret);
       }
 
       for (const auto &replay_message : replay_messages)
       {
-        httpd_ws_frame_t replay_pkt = {};
-        replay_pkt.payload = (uint8_t *)replay_message.data();
-        replay_pkt.len = replay_message.size();
-        replay_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-        esp_err_t replay_ret = httpd_ws_send_frame(req, &replay_pkt);
+        esp_err_t replay_ret = queue_text_message_from_handler(fd, replay_message);
         if (replay_ret != ESP_OK)
         {
-          ESP_LOGW(TAG, "Replay line send failed on fd %d with %d", fd, replay_ret);
+          ESP_LOGW(TAG, "Replay line queue failed on fd %d with %d", fd, replay_ret);
           break;
         }
       }
@@ -441,7 +508,20 @@ esp_err_t HttpServer::websocket_handler(httpd_req_t *req)
 
   if (ws_pkt.type == HTTPD_WS_TYPE_TEXT || ws_pkt.type == HTTPD_WS_TYPE_BINARY)
   {
-    ESP_LOGI(TAG, "WS inbound frame type=%d len=%u", ws_pkt.type, (unsigned)ws_pkt.len);
+    std::string incoming(reinterpret_cast<char *>(payload.data()), ws_pkt.len);
+    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT && incoming == "{\"type\":\"getStatus\"}")
+    {
+      int fd = httpd_req_to_sockfd(req);
+      ESP_LOGI(TAG, "WS status requested on fd %d", fd);
+      esp_err_t status_ret = queue_text_message_from_handler(fd, usb_status_message());
+      if (status_ret != ESP_OK)
+      {
+        ESP_LOGW(TAG, "Status response queue failed on fd %d with %d", fd, status_ret);
+      }
+      return ESP_OK;
+    }
+
+    ESP_LOGD(TAG, "WS inbound frame type=%d len=%u", ws_pkt.type, (unsigned)ws_pkt.len);
     if (usbHandler && usbHandler->isConnected())
     {
       esp_err_t tx_ret = usbHandler->tx_blocking(payload.data(), ws_pkt.len);
@@ -681,6 +761,7 @@ httpd_handle_t HttpServer::start()
   // config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 10;
   config.lru_purge_enable = true;
+  max_open_sockets = config.max_open_sockets;
 
   // Set up a function to be called when a client socket is closed
   config.global_user_ctx = this;
@@ -749,6 +830,17 @@ httpd_handle_t HttpServer::start()
         .supported_subprotocol = NULL};
     httpd_register_uri_handler(this->server, &upload_uri);
 
+    // URI handler for device/partition info used by the upload page
+    httpd_uri_t info_uri = {
+        .uri = "/info",
+        .method = HTTP_GET,
+        .handler = HTTP_HANDLER(HttpServer, info_handler),
+        .user_ctx = this,
+        .is_websocket = false,
+        .handle_ws_control_frames = false,
+        .supported_subprotocol = NULL};
+    httpd_register_uri_handler(this->server, &info_uri);
+
     // URI handler for the login page
     httpd_uri_t login_uri = {
         .uri = "/login.html",
@@ -791,7 +883,6 @@ httpd_handle_t HttpServer::start()
 
 esp_err_t HttpServer::upload_page_handler(httpd_req_t *req)
 {
-
   if (!is_authenticated(req))
   {
     // Redirect to login page
@@ -815,5 +906,36 @@ esp_err_t HttpServer::upload_page_handler(httpd_req_t *req)
   }
   fclose(f);
   httpd_resp_send_chunk(req, NULL, 0); // End response
+  return ESP_OK;
+}
+
+esp_err_t HttpServer::info_handler(httpd_req_t *req)
+{
+  if (!is_authenticated(req))
+  {
+    httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Not authenticated");
+    return ESP_FAIL;
+  }
+
+  const esp_partition_t *running = esp_ota_get_running_partition();
+  const esp_partition_t *next = esp_ota_get_next_update_partition(NULL);
+  const esp_partition_t *fs =
+      esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_LITTLEFS, "littlefs");
+  const esp_app_desc_t *app = esp_app_get_description();
+
+  char json[512];
+  int len = snprintf(json, sizeof(json),
+                     "{\"app\":\"%s\",\"version\":\"%s\",\"built\":\"%s %s\",\"idf\":\"%s\","
+                     "\"running\":\"%s\",\"next\":\"%s\",\"app_partition_size\":%u,"
+                     "\"fs_partition_size\":%u,\"free_heap\":%u}",
+                     app ? app->project_name : "", app ? app->version : "",
+                     app ? app->date : "", app ? app->time : "", app ? app->idf_ver : "",
+                     running ? running->label : "?", next ? next->label : "?",
+                     (unsigned)(next ? next->size : 0),
+                     (unsigned)(fs ? fs->size : 0),
+                     (unsigned)esp_get_free_heap_size());
+
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json, len);
   return ESP_OK;
 }

@@ -3,33 +3,56 @@
 
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ESP32-S3 OTA Upload</title>
   <style>
+    :root {
+      --accent: #00ff99;
+      --bad: #ff4d4d;
+    }
+
     body {
-        font-family: system-ui, sans-serif;
+      font-family: system-ui, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
       min-height: 100vh;
+      margin: 0;
       background: #1e1e1e;
       color: #e0e0e0;
-      padding-top: 40px;
+      padding: 32px 12px;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0 0 4px;
+    }
+
+    a {
+      color: var(--accent);
     }
 
     .card {
       background: #2a2a2a;
       padding: 20px;
       border-radius: 12px;
-      width: 400px;
+      width: min(460px, 100%);
       box-shadow: 0 0 12px rgba(0,0,0,.4);
-      margin-bottom: 32px;
+      margin-bottom: 20px;
+      box-sizing: border-box;
+    }
+
+    .card h2 {
+      font-size: 16px;
+      margin: 0 0 6px;
     }
 
     button {
       padding: 8px 14px;
       border: none;
-      background: #00ff99;
+      background: var(--accent);
       color: #000;
       font-weight: 700;
       border-radius: 8px;
@@ -37,144 +60,168 @@
     }
 
     button:disabled {
-      opacity: .6;
+      opacity: .5;
       cursor: not-allowed;
     }
 
     progress {
       width: 100%;
       height: 10px;
+      margin-top: 12px;
     }
 
     .row {
       display: flex;
       gap: 8px;
       align-items: center;
+      margin-top: 12px;
     }
 
     .row input[type="file"] {
       flex: 1;
+      min-width: 0;
+      color: #bbb;
     }
 
-    #status {
+    .status {
       margin-top: 10px;
       font-size: 13px;
-      opacity: .9;
+      min-height: 18px;
+    }
+
+    .status.err {
+      color: var(--bad);
+    }
+
+    .status.ok {
+      color: var(--accent);
     }
 
     small {
-      opacity: .8;
+      opacity: .75;
+    }
+
+    #info {
+      font-size: 12px;
+      line-height: 1.7;
+      font-family: monospace;
+      opacity: .85;
+    }
+
+    #info span {
+      color: var(--accent);
     }
   </style>
 </head>
 
 <body>
   <div class="card">
-    <h2>ESP32-S3 OTA Upload</h2>
-    <small>Send a <code>.bin</code> Firmware image. Device will reboot after flashing.</small>
-    <div class="row">
-      <input type="file" id="file1" accept=".bin" />
-      <button id="send1">Upload</button>
-    </div>
-    <div style="margin:12px 0;">
-      <progress id="prog1" value="0" max="100"></progress>
-    </div>
-    <div id="status1"></div>
+    <h1>ESP32-S3 OTA</h1>
+    <small><a href="/">&larr; Back to terminal</a></small>
+    <div id="info">Loading device info&hellip;</div>
   </div>
 
   <div class="card">
-    <h2>Upload LittleFS Image</h2>
-    <small>Send a <code>.bin</code> LittleFS image. Device will reboot after flashing.</small>
-    <div class="row" style="margin-top:12px;">
-      <input type="file" id="file2" accept=".bin" />
-      <button id="send2">Upload</button>
+    <h2>Firmware</h2>
+    <small>Application image, e.g. <code>build/esp32s3-serialusb-network.bin</code>. Written to the
+      inactive OTA slot; the device reboots into it.</small>
+    <div class="row">
+      <input type="file" id="fwFile" accept=".bin" />
+      <button id="fwSend">Upload</button>
     </div>
-    <div style="margin:12px 0;">
-      <progress id="prog2" value="0" max="100"></progress>
-    </div>
-    <div id="status2"></div>
+    <progress id="fwProg" value="0" max="100"></progress>
+    <div class="status" id="fwStatus"></div>
   </div>
 
+  <div class="card">
+    <h2>Filesystem</h2>
+    <small>LittleFS image, e.g. <code>build/littlefs.bin</code>. The whole partition is erased and
+      rewritten, then the device reboots.</small>
+    <div class="row">
+      <input type="file" id="fsFile" accept=".bin" />
+      <button id="fsSend">Upload</button>
+    </div>
+    <progress id="fsProg" value="0" max="100"></progress>
+    <div class="status" id="fsStatus"></div>
+  </div>
 
   <script>
-    const fileElfw = document.getElementById('file1');
-    const sendBtnfw = document.getElementById('send1');
-    const statusElfw = document.getElementById('status1');
-    const progElfw = document.getElementById('prog1');
+    const el = id => document.getElementById(id);
+    const buttons = [el('fwSend'), el('fsSend')];
+    let limits = { app: 0, fs: 0 };
 
-    const fileElfs = document.getElementById('file2');
-    const sendBtnfs = document.getElementById('send2');
-    const statusElfs = document.getElementById('status2');
-    const progElfs = document.getElementById('prog2');
+    const human = n => n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : (n / 1024).toFixed(1) + ' KB';
 
+    function setStatus(node, text, cls) {
+      node.textContent = text;
+      node.className = 'status' + (cls ? ' ' + cls : '');
+    }
 
-    const human = n => (n / 1024 / 1024).toFixed(2) + " MB";
+    fetch('/info', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => {
+        limits = { app: d.app_partition_size, fs: d.fs_partition_size };
+        el('info').innerHTML =
+          `app: <span>${d.app} ${d.version}</span><br>` +
+          `built: <span>${d.built}</span> (IDF <span>${d.idf}</span>)<br>` +
+          `running: <span>${d.running}</span> &rarr; target slot: <span>${d.next}</span> (${human(d.app_partition_size)})<br>` +
+          `littlefs: <span>${human(d.fs_partition_size)}</span> &middot; free heap: <span>${human(d.free_heap)}</span>`;
+      })
+      .catch(err => {
+        if (err === 401) { location.href = '/login.html'; return; }
+        el('info').textContent = 'Device info unavailable.';
+      });
 
-    sendBtnfw.addEventListener('click', () => {
-      const f = fileElfw.files && fileElfw.files[0];
-      if (!f) { statusElfw.textContent = "Pick a .bin first"; return; }
+    function upload(url, fileInput, progress, status, maxSize, doneText) {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) { setStatus(status, 'Pick a .bin file first.', 'err'); return; }
+      if (maxSize && f.size > maxSize) {
+        setStatus(status, `Image is ${human(f.size)} but the partition is only ${human(maxSize)}.`, 'err');
+        return;
+      }
 
-      statusElfw.textContent = `Uploading ${f.name} (${human(f.size)})...`;
-      sendBtnfw.disabled = true;
+      buttons.forEach(b => b.disabled = true);
+      progress.value = 0;
+      setStatus(status, `Uploading ${f.name} (${human(f.size)})\u2026`);
 
-      // Use XHR for upload progress events; body is raw binary
+      const started = Date.now();
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/upload', true);
+      xhr.open('POST', url, true);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = (e.loaded / e.total) * 100;
-          progElfw.value = pct;
-        }
+      xhr.upload.onprogress = e => {
+        if (!e.lengthComputable) return;
+        progress.value = (e.loaded / e.total) * 100;
+        const kbs = e.loaded / 1024 / Math.max(1, (Date.now() - started) / 1000);
+        setStatus(status, `${progress.value.toFixed(0)}% \u2014 ${human(e.loaded)} of ${human(e.total)} (${kbs.toFixed(0)} KB/s)`);
       };
       xhr.onload = () => {
-        sendBtnfw.disabled = false;
+        buttons.forEach(b => b.disabled = false);
         if (xhr.status === 200) {
-          progElfw.value = 100;
-          statusElfw.textContent = "Upload successful, device will reboot...";
-        } else {
-          statusElfw.textContent = "Upload failed: HTTP " + xhr.status + " — " + xhr.responseText;
-        }
-      };
-      xhr.onerror = () => {
-        sendBtnfw.disabled = false;
-        statusElfw.textContent = "Network error during upload.";
-      };
-      xhr.send(f);
-    });
-
-    sendBtnfs.addEventListener('click', () => {
-      const f = fileElfs.files && fileElfs.files[0];
-      if (!f) { statusElfs.textContent = "Pick a .bin first"; return; }
-
-      statusElfs.textContent = `Uploading ${f.name} (${human(f.size)})...`;
-      sendBtnfs.disabled = true;
-      progElfs.value = 0;
-
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/uploadfs', true);
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream'); // raw bytes
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) progElfs.value = (e.loaded / e.total) * 100;
-      };
-      xhr.onload = () => {
-        sendBtnfs.disabled = false;
-        if (xhr.status === 200) {
-          progElfs.value = 100;
-          statusElfs.textContent = "Filesystem flashed. Rebooting...";
+          progress.value = 100;
+          setStatus(status, doneText, 'ok');
+          setTimeout(() => location.reload(), 8000);
+        } else if (xhr.status === 401) {
+          location.href = '/login.html';
         } else if (xhr.status === 413) {
-          statusElfs.textContent = "Image larger than LittleFS partition.";
+          setStatus(status, 'Image is larger than the target partition.', 'err');
         } else {
-          statusElfs.textContent = "Upload failed: HTTP " + xhr.status + " — " + xhr.responseText;
+          setStatus(status, `Failed: HTTP ${xhr.status} \u2014 ${xhr.responseText}`, 'err');
         }
       };
       xhr.onerror = () => {
-        sendBtnfs.disabled = false;
-        statusElfs.textContent = "Network error during upload.";
+        buttons.forEach(b => b.disabled = false);
+        setStatus(status, 'Network error during upload.', 'err');
       };
       xhr.send(f);
-    });
+    }
 
+    el('fwSend').addEventListener('click', () =>
+      upload('/upload', el('fwFile'), el('fwProg'), el('fwStatus'), limits.app,
+        'Firmware written. Rebooting \u2014 this page reloads shortly.'));
+
+    el('fsSend').addEventListener('click', () =>
+      upload('/uploadfs', el('fsFile'), el('fsProg'), el('fsStatus'), limits.fs,
+        'Filesystem written. Rebooting \u2014 this page reloads shortly.'));
   </script>
 </body>
 

@@ -51,8 +51,15 @@
       transition: all 0.3s ease, box-shadow 0.3s ease;
     }
 
+    input:disabled,
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     #themeToggle,
     #sendBtn,
+    #otaBtn,
     #clearHistory {
       padding: 8px 12px;
       transition: all 0.4s ease, box-shadow 0.4s ease, color 0.4s ease, background-color 0.4s ease, border 0.4s ease;
@@ -107,6 +114,7 @@
     }
 
     body.modern #sendBtn,
+    body.modern #otaBtn,
     body.modern #clearHistory {
       background-color: #00ff99;
       color: #000;
@@ -114,6 +122,7 @@
     }
 
     body.modern #sendBtn:hover,
+    body.modern #otaBtn:hover,
     body.modern #clearHistory:hover {
       background-color: #00cc7a;
     }
@@ -161,6 +170,7 @@
     }
 
     body.retro #sendBtn,
+    body.retro #otaBtn,
     body.retro #clearHistory {
       background-color: #00ff00;
       color: #000;
@@ -168,6 +178,7 @@
     }
 
     body.retro #sendBtn:hover,
+    body.retro #otaBtn:hover,
     body.retro #clearHistory:hover {
       background-color: #00cc00;
     }
@@ -245,6 +256,7 @@
     </label>
     <button id="sendBtn">Send</button>
     <button id="clearHistory">Clear History</button>
+    <button id="otaBtn" onclick="location.href='/upload.html'">OTA</button>
   </div>
   <script>
     const toggleBtn = document.getElementById('themeToggle');
@@ -275,15 +287,24 @@
         toggleBtn.textContent = theme === 'modern' ? 'Switch to Retro' : 'Switch to Modern';
     }
 
+    function setControlsEnabled(enabled) {
+        input.disabled = !enabled;
+        autoWrap.disabled = !enabled;
+        sendBtn.disabled = !enabled;
+        input.placeholder = enabled ? 'Type a command...' : 'Disconnected...';
+    }
+
     function connect() {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        console.log('Connecting to WebSocket:', `${proto}://${window.location.host}/ws`);
         ws = new WebSocket(`${proto}://${window.location.host}/ws`);
 
         ws.onopen = () => {
             console.log('WebSocket connected');
             connectionStatusEl.textContent = '...';
             connectionStatusEl.className = '';
-            // Server will send USB status upon connection.
+            setControlsEnabled(true);
+            ws.send(JSON.stringify({ type: 'getStatus' }));
         };
 
         ws.onmessage = (event) => {
@@ -309,6 +330,7 @@
             console.log('WebSocket disconnected. Reconnecting in 1s...');
             connectionStatusEl.textContent = 'SERVER DISCONNECTED';
             connectionStatusEl.className = 'disconnected';
+            setControlsEnabled(false);
             setTimeout(connect, 1000);
         };
 
@@ -336,6 +358,7 @@
     }
 
     // Initial connection
+    setControlsEnabled(false);
     connect();
 
     // Show history immediately on page load
@@ -344,6 +367,7 @@
     // Send command
     function send(e) {
       if (e) e.preventDefault();
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
       let value = input.value.trim();
       if (!value) return;
 

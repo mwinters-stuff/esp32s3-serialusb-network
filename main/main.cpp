@@ -6,6 +6,7 @@
 #include <esp_netif.h>
 #include <nvs_flash.h>
 
+#include "arduino-ota.h"
 #include "esp-mdns.h"
 #include "w5500.h"
 #include "littlefs.h"
@@ -66,6 +67,7 @@ extern "C" void app_main(void)
     }
 
     initialise_mdns();
+    arduino_ota_start(ledIndicator);
     auto usbHandler = std::make_shared<UsbHandler>(ledIndicator);
     auto httpServer = std::make_shared<HttpServer>(usbHandler, ledIndicator);
     httpServer->start();

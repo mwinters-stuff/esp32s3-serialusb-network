@@ -173,6 +173,12 @@ void UsbHandler::rx_dispatch_task()
       }
     }
 
+    if (!rx_line_buffer.empty())
+    {
+      flush_rx_line(false);
+      last_rx_tick = 0;
+    }
+
     free(message.data);
   }
 }

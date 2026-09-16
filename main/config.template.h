@@ -10,6 +10,10 @@
 // Password for web interface upload pages
 #define HTTP_PASSWORD "admin"
 
+// ArduinoOTA (espota.py) settings. Empty password disables authentication.
+#define ARDUINO_OTA_PORT 3232
+#define OTA_PASSWORD HTTP_PASSWORD
+
 
 // Change these values to match your needs
 #define BAUDRATE (115200)

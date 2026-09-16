@@ -1,7 +1,7 @@
 idf_component_register(
-    SRCS "led_indicator.cpp" "local-ch34x-device.cpp" "usb-handler.cpp" "http-server.cpp" "main.cpp" "esp-mdns.cpp" "wifi.cpp" "w5500.cpp" "littlefs.cpp"
+    SRCS "led_indicator.cpp" "local-ch34x-device.cpp" "usb-handler.cpp" "http-server.cpp" "main.cpp" "esp-mdns.cpp" "wifi.cpp" "w5500.cpp" "littlefs.cpp" "arduino-ota.cpp"
     INCLUDE_DIRS "."
-    REQUIRES esp_http_server esp_wifi nvs_flash esp_https_ota app_update led_strip esp_eth driver
+    REQUIRES esp_http_server esp_wifi nvs_flash esp_https_ota app_update led_strip esp_eth driver mbedtls
     PRIV_REQUIRES usb
     )
 littlefs_create_partition_image(littlefs ../littlefs FLASH_IN_PROJECT)
